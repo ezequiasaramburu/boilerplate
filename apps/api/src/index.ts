@@ -26,6 +26,8 @@ import passport from './config/passport.config.js'
 import { authRouter } from './routes/auth.js'
 import { socialAuthRouter } from './routes/social-auth.js'
 import { usersRouter } from './routes/users.js'
+import { billingRouter } from './routes/billing.js'
+import { webhookRouter } from './routes/webhooks.js'
 
 const app = express()
 const port = process.env.PORT || 4000
@@ -78,6 +80,9 @@ app.get('/health', (_, res) => {
   res.json({ success: true, message: 'API is running!' })
 })
 
+// Webhooks must be before body parsing middleware
+app.use('/webhooks', express.raw({ type: 'application/json' }), webhookRouter)
+
 // API v1 routes with specific rate limiting
 const API_VERSION = '/api/v1'
 
@@ -88,6 +93,7 @@ app.get(`${API_VERSION}/csrf-token`, csrfTokenEndpoint)
 app.use(`${API_VERSION}/auth`, authRateLimit, jwtCSRFProtection, authRouter)
 app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter) // OAuth skips CSRF
 app.use(`${API_VERSION}/users`, authenticateToken, usersRouter)
+app.use(`${API_VERSION}/billing`, authenticateToken, billingRouter)
 
 // Versioned health check
 app.get(`${API_VERSION}/health`, (_, res) => {

@@ -26,11 +26,17 @@ model User {
   // Email verification
   emailVerificationToken String?
   
+  // Stripe customer integration
+  stripeCustomerId String? @unique
+  
   // Social accounts
   socialAccounts SocialAccount[]
   
   // Refresh tokens
   refreshTokens RefreshToken[]
+  
+  // Subscriptions
+  subscriptions Subscription[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -80,4 +86,97 @@ enum Provider {
   TWITTER
   DISCORD
   LINKEDIN
+}
+
+model SubscriptionPlan {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String?
+  stripePriceId     String   @unique
+  stripeProductId   String
+  amount            Int      // Price in cents
+  currency          String   @default("usd")
+  interval          BillingInterval
+  intervalCount     Int      @default(1)
+  trialDays         Int?     // Trial period in days
+  features          Json?    // JSON array of features
+  maxUsers          Int?     // Usage limits
+  maxProjects       Int?
+  maxStorage        BigInt?  // Storage limit in bytes
+  popular           Boolean  @default(false)
+  active            Boolean  @default(true)
+  
+  // Relations
+  subscriptions     Subscription[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                    String            @id @default(cuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId                String
+  plan                  SubscriptionPlan  @relation(fields: [planId], references: [id])
+  
+  // Stripe integration
+  stripeSubscriptionId  String            @unique
+  stripeCustomerId      String
+  stripePriceId         String
+  
+  // Subscription details
+  status                SubscriptionStatus
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean           @default(false)
+  canceledAt            DateTime?
+  trialStart            DateTime?
+  trialEnd              DateTime?
+  
+  // Billing
+  amount                Int               // Amount in cents
+  currency              String            @default("usd")
+  interval              BillingInterval
+  intervalCount         Int               @default(1)
+  
+  // Usage tracking
+  usageResetDate        DateTime?
+  metadata              Json?             // Store additional data
+  
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@map("subscriptions")
+}
+
+model WebhookEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  eventType     String
+  processed     Boolean  @default(false)
+  data          Json
+  processingError String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("webhook_events")
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  PAST_DUE
+  TRIALING
+  UNPAID
 } 
