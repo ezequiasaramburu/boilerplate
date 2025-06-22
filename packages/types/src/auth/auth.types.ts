@@ -1,0 +1,91 @@
+import { z } from 'zod'
+
+// Authentication schemas
+export const registerSchema = z.object({
+  email: z.string().email('Please enter a valid email'),
+  password: z.string().min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+})
+
+export const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email'),
+  password: z.string().min(1, 'Password is required'),
+})
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token is required'),
+})
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Please enter a valid email'),
+})
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  password: z.string().min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+})
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+})
+
+// Authentication types
+export type RegisterInput = z.infer<typeof registerSchema>
+export type LoginInput = z.infer<typeof loginSchema>
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
+
+// JWT payload type
+export interface JWTPayload {
+  userId: string
+  email: string
+  role?: string
+  iat?: number
+  exp?: number
+}
+
+// Authentication response types
+export interface AuthTokens {
+  accessToken: string
+  refreshToken: string
+}
+
+export interface AuthUser {
+  id: string
+  email: string
+  name: string | null
+  avatar: string | null
+  role: string
+  emailVerified: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface AuthResponse {
+  user: AuthUser
+  tokens: AuthTokens
+}
+
+// Role enum
+export enum UserRole {
+  USER = 'USER',
+  ADMIN = 'ADMIN',
+  MODERATOR = 'MODERATOR'
+}
+
+// Request types with authenticated user
+export interface AuthenticatedRequest {
+  user: AuthUser
+} 

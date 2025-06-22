@@ -8,6 +8,8 @@ import {
   errorHandler,
   notFoundHandler,
 } from './middleware/index.js'
+import { authenticateToken } from './middleware/auth.middleware.js'
+import { authRouter } from './routes/auth.js'
 import { usersRouter } from './routes/users.js'
 
 const app = express()
@@ -29,7 +31,8 @@ app.get('/health', (_, res) => {
 })
 
 // API routes
-app.use('/api/users', usersRouter)
+app.use('/api/auth', authRouter)
+app.use('/api/users', authenticateToken, usersRouter)
 
 // Error handling
 app.use(notFoundHandler)
