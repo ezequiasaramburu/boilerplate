@@ -37,7 +37,7 @@ A production-ready monorepo boilerplate built with TypeScript, featuring a Next.
 ## 📦 **Project Structure**
 
 ```
-ai-coach/
+boilerplate/
 ├── apps/
 │   ├── api/                 # Express.js API
 │   │   ├── src/
@@ -73,7 +73,7 @@ ai-coach/
 
 ```bash
 git clone <repository-url>
-cd ai-coach
+cd boilerplate
 pnpm setup
 ```
 
