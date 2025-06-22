@@ -1,6 +1,6 @@
-# AI Coach - Full-Stack Monorepo Boilerplate
+# Full-Stack Monorepo Boilerplate
 
-A modern, production-ready monorepo boilerplate built with TypeScript, featuring a Next.js frontend, Express.js API, and PostgreSQL database.
+A production-ready monorepo boilerplate built with TypeScript, featuring a Next.js frontend, Express.js API, and PostgreSQL database.
 
 ## 🚀 **Tech Stack**
 
@@ -84,7 +84,7 @@ pnpm setup
 cp env.example .env
 
 # Update .env with your database URL and other configurations
-DATABASE_URL="postgresql://username:password@localhost:5432/ai_coach_db"
+DATABASE_URL="postgresql://username:password@localhost:5432/example_db"
 ```
 
 ### **3. Database Setup**
