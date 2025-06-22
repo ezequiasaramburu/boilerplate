@@ -85,6 +85,46 @@ export enum UserRole {
   MODERATOR = 'MODERATOR'
 }
 
+// OAuth Provider enum
+export enum Provider {
+  GOOGLE = 'GOOGLE',
+  GITHUB = 'GITHUB',
+  FACEBOOK = 'FACEBOOK',
+  TWITTER = 'TWITTER',
+  DISCORD = 'DISCORD',
+  LINKEDIN = 'LINKEDIN'
+}
+
+// Social account types
+export interface SocialAccount {
+  id: string
+  provider: Provider
+  providerId: string
+  email?: string
+  name?: string
+  avatar?: string
+  userId: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// OAuth profile from providers
+export interface OAuthProfile {
+  id: string
+  provider: Provider
+  email?: string
+  name?: string
+  avatar?: string
+  username?: string
+}
+
+// Social auth response
+export interface SocialAuthResponse {
+  user: AuthUser
+  tokens: AuthTokens
+  isNewUser: boolean
+}
+
 // Request types with authenticated user
 export interface AuthenticatedRequest {
   user: AuthUser

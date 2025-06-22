@@ -162,7 +162,7 @@ export class AuthService {
     }
   }
 
-  private async generateTokens(user: any): Promise<AuthTokens> {
+  async generateTokens(user: any): Promise<AuthTokens> {
     const payload: JWTPayload = {
       userId: user.id,
       email: user.email,
@@ -197,7 +197,7 @@ export class AuthService {
     }
   }
 
-  private formatUserResponse(user: any): AuthUser {
+  formatUserResponse(user: any): AuthUser {
     return {
       id: user.id,
       email: user.email,

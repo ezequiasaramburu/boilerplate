@@ -13,7 +13,7 @@ datasource db {
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
-  password      String
+  password      String?   // Optional for social login users
   name          String?
   avatar        String?
   role          UserRole  @default(USER)
@@ -26,6 +26,9 @@ model User {
   // Email verification
   emailVerificationToken String?
   
+  // Social accounts
+  socialAccounts SocialAccount[]
+  
   // Refresh tokens
   refreshTokens RefreshToken[]
   
@@ -33,6 +36,24 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@map("users")
+}
+
+model SocialAccount {
+  id         String   @id @default(cuid())
+  provider   Provider
+  providerId String   // OAuth provider's user ID
+  email      String?
+  name       String?
+  avatar     String?
+  
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([provider, providerId])
+  @@map("social_accounts")
 }
 
 model RefreshToken {
@@ -50,4 +71,13 @@ enum UserRole {
   USER
   ADMIN
   MODERATOR
+}
+
+enum Provider {
+  GOOGLE
+  GITHUB
+  FACEBOOK
+  TWITTER
+  DISCORD
+  LINKEDIN
 } 

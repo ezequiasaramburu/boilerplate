@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import express from 'express'
+import session from 'express-session'
 import { connectDb } from '@my/database'
 import {
   corsMiddleware,
@@ -9,7 +10,9 @@ import {
   notFoundHandler,
 } from './middleware/index.js'
 import { authenticateToken } from './middleware/auth.middleware.js'
+import passport from './config/passport.config.js'
 import { authRouter } from './routes/auth.js'
+import { socialAuthRouter } from './routes/social-auth.js'
 import { usersRouter } from './routes/users.js'
 
 const app = express()
@@ -25,14 +28,39 @@ app.use(loggingMiddleware)
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
+// Session middleware for Passport
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: process.env.NODE_ENV === 'production' }
+}))
+
+// Passport middleware
+app.use(passport.initialize())
+app.use(passport.session())
+
 // Health check
 app.get('/health', (_, res) => {
   res.json({ success: true, message: 'API is running!' })
 })
 
-// API routes
-app.use('/api/auth', authRouter)
-app.use('/api/users', authenticateToken, usersRouter)
+// API v1 routes
+const API_VERSION = '/api/v1'
+
+app.use(`${API_VERSION}/auth`, authRouter)
+app.use(`${API_VERSION}/auth/oauth`, socialAuthRouter)
+app.use(`${API_VERSION}/users`, authenticateToken, usersRouter)
+
+// Versioned health check
+app.get(`${API_VERSION}/health`, (_, res) => {
+  res.json({ 
+    success: true, 
+    message: 'API v1 is running!',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  })
+})
 
 // Error handling
 app.use(notFoundHandler)
