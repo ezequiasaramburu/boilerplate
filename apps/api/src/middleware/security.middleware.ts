@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from 'express'
 
 // Enhanced security headers using Helmet
 export const securityHeaders = helmet({
-  // Content Security Policy
+  // Content Security Policy with CSRF considerations
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -16,6 +16,7 @@ export const securityHeaders = helmet({
       objectSrc: ["'none'"],
       baseUri: ["'none'"],
       formAction: ["'self'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
     },
   },
   // Prevent clickjacking
@@ -30,11 +31,38 @@ export const securityHeaders = helmet({
   },
   // Prevent MIME type sniffing
   noSniff: true,
-  // Referrer policy
-  referrerPolicy: { policy: "same-origin" },
+  // Referrer policy - stricter for CSRF protection
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   // XSS protection
   xssFilter: true,
+  // Cross Origin Embedder Policy
+  crossOriginEmbedderPolicy: false, // Set to true if you need stronger isolation
+  // Cross Origin Opener Policy
+  crossOriginOpenerPolicy: { policy: "same-origin" },
+  // Cross Origin Resource Policy
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  // Origin Agent Cluster
+  originAgentCluster: true,
 })
+
+// Additional CSRF-specific security headers
+export const csrfSecurityHeaders = (req: Request, res: Response, next: NextFunction) => {
+  // Vary header to prevent caching issues with CSRF tokens
+  res.set('Vary', 'Origin, X-Requested-With')
+  
+  // Additional security headers for CSRF protection
+  res.set('X-Content-Type-Options', 'nosniff')
+  res.set('X-Frame-Options', 'DENY')
+  
+  // Prevent caching of CSRF-sensitive responses
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.set('Pragma', 'no-cache')
+    res.set('Expires', '0')
+  }
+  
+  next()
+}
 
 // Input sanitization middleware
 export const sanitizeInput = (req: Request, res: Response, next: NextFunction) => {

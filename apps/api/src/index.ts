@@ -1,11 +1,13 @@
 import 'dotenv/config'
 import express from 'express'
 import session from 'express-session'
+import cookieParser from 'cookie-parser'
 import { connectDb } from '@my/database'
 import {
   corsMiddleware,
   securityMiddleware,
   securityHeaders,
+  csrfSecurityHeaders,
   sanitizeInput,
   requestSizeLimit,
   ipFilter,
@@ -13,6 +15,8 @@ import {
   authRateLimit,
   oauthRateLimit,
   registrationRateLimit,
+  jwtCSRFProtection,
+  csrfTokenEndpoint,
   loggingMiddleware,
   errorHandler,
   notFoundHandler,
@@ -45,8 +49,14 @@ app.use(globalRateLimit) // Apply global rate limit to all routes
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
+// Cookie parsing for CSRF
+app.use(cookieParser())
+
 // Input sanitization
 app.use(sanitizeInput)
+
+// CSRF protection headers
+app.use(csrfSecurityHeaders)
 
 // Logging
 app.use(loggingMiddleware)
@@ -71,9 +81,12 @@ app.get('/health', (_, res) => {
 // API v1 routes with specific rate limiting
 const API_VERSION = '/api/v1'
 
-// Apply specific rate limits to different route groups
-app.use(`${API_VERSION}/auth`, authRateLimit, authRouter)
-app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter)
+// CSRF token endpoint (public)
+app.get(`${API_VERSION}/csrf-token`, csrfTokenEndpoint)
+
+// Apply specific rate limits and CSRF protection to different route groups
+app.use(`${API_VERSION}/auth`, authRateLimit, jwtCSRFProtection, authRouter)
+app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter) // OAuth skips CSRF
 app.use(`${API_VERSION}/users`, authenticateToken, usersRouter)
 
 // Versioned health check

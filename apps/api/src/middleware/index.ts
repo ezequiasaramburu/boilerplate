@@ -8,11 +8,20 @@ import type { ApiError } from '@my/types'
 // Import security middleware
 export { 
   securityHeaders, 
+  csrfSecurityHeaders,
   sanitizeInput, 
   requestSizeLimit, 
   ipFilter, 
   validateApiKey 
 } from './security.middleware.js'
+
+// Import CSRF protection middleware
+export {
+  csrfProtection,
+  doubleSubmitCookieCSRF,
+  jwtCSRFProtection,
+  csrfTokenEndpoint
+} from './csrf.middleware.js'
 
 // Import rate limiting middleware
 export {
