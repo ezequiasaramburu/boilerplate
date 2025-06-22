@@ -1,0 +1,28 @@
+{
+  "name": "ai-coach",
+  "private": true,
+  "packageManager": "pnpm@8.6.12",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "turbo": "^1.13.0",
+    "typescript": "^5.3.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean",
+    "db:generate": "turbo run db:generate",
+    "db:push": "turbo run db:push",
+    "db:migrate": "turbo run db:migrate",
+    "db:studio": "turbo run db:studio",
+    "db:seed": "turbo run db:seed",
+    "install:packages": "pnpm install",
+    "setup": "pnpm install && pnpm db:generate"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@my/database": ["packages/database/src"],
+      "@my/types": ["packages/types/src"],
+      "@my/ui": ["packages/ui/src"],
+      "@my/utils": ["packages/utils/src"]
+    }
+  }
+} 
