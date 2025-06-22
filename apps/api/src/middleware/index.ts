@@ -5,6 +5,25 @@ import morgan from 'morgan'
 import { ZodError } from 'zod'
 import type { ApiError } from '@my/types'
 
+// Import security middleware
+export { 
+  securityHeaders, 
+  sanitizeInput, 
+  requestSizeLimit, 
+  ipFilter, 
+  validateApiKey 
+} from './security.middleware.js'
+
+// Import rate limiting middleware
+export {
+  globalRateLimit,
+  authRateLimit,
+  authenticatedRateLimit,
+  sensitiveRateLimit,
+  oauthRateLimit,
+  registrationRateLimit
+} from './rate-limit.middleware.js'
+
 // CORS configuration
 export const corsMiddleware = cors({
   origin: process.env.NODE_ENV === 'production' 

@@ -5,6 +5,14 @@ import { connectDb } from '@my/database'
 import {
   corsMiddleware,
   securityMiddleware,
+  securityHeaders,
+  sanitizeInput,
+  requestSizeLimit,
+  ipFilter,
+  globalRateLimit,
+  authRateLimit,
+  oauthRateLimit,
+  registrationRateLimit,
   loggingMiddleware,
   errorHandler,
   notFoundHandler,
@@ -21,12 +29,27 @@ const port = process.env.PORT || 4000
 // Connect to database
 await connectDb()
 
-// Middleware
+// Core Middleware (order matters!)
+app.set('trust proxy', 1) // Trust first proxy for rate limiting
+
+// Security middleware
+app.use(securityHeaders) // Enhanced helmet security
 app.use(corsMiddleware)
-app.use(securityMiddleware)
+app.use(ipFilter) // IP filtering
+app.use(requestSizeLimit) // Request size limits
+
+// Rate limiting
+app.use(globalRateLimit) // Apply global rate limit to all routes
+
+// Request parsing
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+
+// Input sanitization
+app.use(sanitizeInput)
+
+// Logging
 app.use(loggingMiddleware)
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
 
 // Session middleware for Passport
 app.use(session({
@@ -45,11 +68,12 @@ app.get('/health', (_, res) => {
   res.json({ success: true, message: 'API is running!' })
 })
 
-// API v1 routes
+// API v1 routes with specific rate limiting
 const API_VERSION = '/api/v1'
 
-app.use(`${API_VERSION}/auth`, authRouter)
-app.use(`${API_VERSION}/auth/oauth`, socialAuthRouter)
+// Apply specific rate limits to different route groups
+app.use(`${API_VERSION}/auth`, authRateLimit, authRouter)
+app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter)
 app.use(`${API_VERSION}/users`, authenticateToken, usersRouter)
 
 // Versioned health check
