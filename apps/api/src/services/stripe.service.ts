@@ -218,6 +218,12 @@ class StripeService {
         },
         include: {
           plan: true,
+          usageQuotas: true,
+          usageAlerts: {
+            where: { acknowledged: false },
+            orderBy: { createdAt: 'desc' },
+            take: 10
+          }
         },
         orderBy: {
           createdAt: 'desc',
@@ -228,27 +234,24 @@ class StripeService {
         return null;
       }
 
-      // TODO: Implement actual usage tracking
-      // For now, return mock data
+      // Get actual usage statistics from usage service
+      const { usageService } = await import('./usage.service.js');
+      const usageStats = await usageService.getCurrentUsageStats(userId);
+
       return {
         planName: subscription.plan.name,
         status: subscription.status as SubscriptionStatus,
         currentPeriodStart: subscription.currentPeriodStart,
         currentPeriodEnd: subscription.currentPeriodEnd,
-        usageStats: {
-          users: { current: 1, limit: subscription.plan.maxUsers || undefined },
-          projects: { current: 3, limit: subscription.plan.maxProjects || undefined },
-          storage: {
-            current: 250 * 1024 * 1024,
-            limit: subscription.plan.maxStorage ? Number(subscription.plan.maxStorage) : undefined,
-          },
-        },
+        usageStats,
         billingInfo: {
           amount: subscription.amount,
           currency: subscription.currency,
           interval: subscription.interval as BillingInterval,
           nextBillingDate: subscription.currentPeriodEnd,
         },
+        alerts: subscription.usageAlerts,
+        quotas: subscription.usageQuotas,
       };
     } catch (error) {
       console.error('Error getting subscription usage:', error);

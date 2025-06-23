@@ -22,9 +22,10 @@ import {
 import { authenticateToken } from './middleware/auth.middleware.js';
 import passport from './config/passport.config.js';
 import { authRouter } from './routes/auth.js';
-import { socialAuthRouter } from './routes/social-auth.js';
-import { usersRouter } from './routes/users.js';
 import { billingRouter } from './routes/billing.js';
+import { socialAuthRouter } from './routes/social-auth.js';
+import { usageRouter } from './routes/usage.js';
+import { usersRouter } from './routes/users.js';
 import webhookAdminRouter from './routes/webhook-admin.js';
 
 const app = express();
@@ -84,6 +85,7 @@ app.use(`${API_VERSION}/auth`, authRateLimit, jwtCSRFProtection, authRouter);
 app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter); // OAuth skips CSRF
 app.use(`${API_VERSION}/users`, authenticateToken, usersRouter);
 app.use(`${API_VERSION}/billing`, authenticateToken, billingRouter);
+app.use(`${API_VERSION}/usage`, authenticateToken, usageRouter);
 app.use(`${API_VERSION}/admin/webhooks`, webhookAdminRouter);
 
 // Versioned health check

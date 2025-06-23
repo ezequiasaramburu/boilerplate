@@ -197,6 +197,9 @@ class WebhookService {
 
       console.log(`💰 Created subscription for user ${userId}: ${subscription.id}`);
 
+      // Initialize usage quotas for the new subscription
+      await this.initializeUsageQuotas(newSubscription.id, plan);
+
       await this.sendSubscriptionNotifications(newSubscription, plan);
       await this.checkRevenueMilestone();
     } catch (error) {
@@ -277,6 +280,73 @@ class WebhookService {
       `🎉 New subscription! ${newSubscription.user.email} subscribed to ${plan.name}`,
       'sales',
     );
+  }
+
+  // Initialize usage quotas for a new subscription
+  private async initializeUsageQuotas(subscriptionId: string, plan: any): Promise<void> {
+    try {
+      const { usageService } = await import('./usage.service.js');
+      const { UsageMetricType } = await import('@my/types');
+
+      const quotaPromises = [];
+
+      // Initialize user quota if plan has user limit
+      if (plan.maxUsers) {
+        quotaPromises.push(
+          usageService.updateQuota(
+            subscriptionId,
+            UsageMetricType.USERS,
+            plan.maxUsers,
+            { alertThreshold: 80 },
+          ),
+        );
+      }
+
+      // Initialize project quota if plan has project limit
+      if (plan.maxProjects) {
+        quotaPromises.push(
+          usageService.updateQuota(
+            subscriptionId,
+            UsageMetricType.PROJECTS,
+            plan.maxProjects,
+            { alertThreshold: 80 },
+          ),
+        );
+      }
+
+      // Initialize storage quota if plan has storage limit
+      if (plan.maxStorage) {
+        quotaPromises.push(
+          usageService.updateQuota(
+            subscriptionId,
+            UsageMetricType.STORAGE,
+            Number(plan.maxStorage),
+            { alertThreshold: 85 },
+          ),
+        );
+      }
+
+      // Initialize API calls quota (default limit for all plans)
+      const apiCallLimit = plan.name === 'STARTER' ? 10000 :
+        plan.name === 'PRO' ? 100000 :
+          1000000; // Enterprise
+
+      quotaPromises.push(
+        usageService.updateQuota(
+          subscriptionId,
+          UsageMetricType.API_CALLS,
+          apiCallLimit,
+          { alertThreshold: 90 },
+        ),
+      );
+
+      await Promise.all(quotaPromises);
+      console.log(`📊 Usage quotas initialized for subscription: ${subscriptionId}`);
+
+    } catch (error) {
+      console.error('❌ Error initializing usage quotas:', error);
+      // Don't throw - quota initialization failure shouldn't stop subscription creation
+    }
   }
 
   // Handle subscription updates with enhanced logging

@@ -38,6 +38,10 @@ model User {
   // Subscriptions
   subscriptions Subscription[]
   
+  // Usage tracking
+  usageRecords  UsageRecord[]
+  usageAlerts   UsageAlert[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -146,6 +150,11 @@ model Subscription {
   usageResetDate        DateTime?
   metadata              Json?             // Store additional data
   
+  // Relations
+  usageRecords          UsageRecord[]
+  usageQuotas           UsageQuota[]
+  usageAlerts           UsageAlert[]
+  
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -179,4 +188,109 @@ enum SubscriptionStatus {
   PAST_DUE
   TRIALING
   UNPAID
+}
+
+// Usage tracking models
+model UsageRecord {
+  id             String           @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription     @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Usage details
+  metricType     UsageMetricType
+  quantity       Int
+  unitPrice      Decimal?         // Price per unit (if applicable)
+  description    String?
+  metadata       Json?            // Additional data (e.g., project ID, file path)
+  
+  // Billing period
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+  
+  // Processing status
+  processed      Boolean          @default(false)
+  invoiced       Boolean          @default(false)
+  
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([subscriptionId, billingPeriodStart, billingPeriodEnd])
+  @@index([userId, metricType, createdAt])
+  @@map("usage_records")
+}
+
+model UsageQuota {
+  id             String           @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription     @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  // Quota details
+  metricType     UsageMetricType
+  limitAmount    Int              // Maximum allowed usage
+  currentAmount  Int              @default(0)
+  resetDate      DateTime?        // When quota resets (if applicable)
+  
+  // Quota behavior
+  hardLimit      Boolean          @default(true)   // Block when exceeded
+  alertThreshold Int?             // Alert when this percentage is reached (0-100)
+  
+  // Status
+  exceeded       Boolean          @default(false)
+  alertSent      Boolean          @default(false)
+  
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([subscriptionId, metricType])
+  @@map("usage_quotas")
+}
+
+model UsageAlert {
+  id             String           @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription     @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Alert details
+  metricType     UsageMetricType
+  alertType      UsageAlertType
+  threshold      Int              // Percentage threshold (0-100)
+  currentUsage   Int
+  limitAmount    Int
+  
+  // Alert status
+  sent           Boolean          @default(false)
+  acknowledged   Boolean          @default(false)
+  resolvedAt     DateTime?
+  
+  // Notification details
+  notificationSent Boolean        @default(false)
+  emailSent      Boolean          @default(false)
+  
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([subscriptionId, metricType, alertType])
+  @@index([userId, sent, acknowledged])
+  @@map("usage_alerts")
+}
+
+enum UsageMetricType {
+  USERS
+  PROJECTS
+  STORAGE
+  API_CALLS
+  BANDWIDTH
+  COMPUTE_HOURS
+  CUSTOM
+}
+
+enum UsageAlertType {
+  WARNING        // 80% threshold
+  CRITICAL       // 95% threshold
+  EXCEEDED       // 100% threshold
+  APPROACHING    // 90% threshold
 } 

@@ -1,3 +1,4 @@
+import { prisma } from '@my/database';
 import type { EmailData, SubscriptionWithPlan } from '@my/types';
 
 class NotificationService {
@@ -221,6 +222,54 @@ class NotificationService {
       `🎉 Revenue milestone reached! Monthly revenue: ${this.formatAmount(monthlyRevenue, 'usd')}`,
       'revenue',
     );
+  }
+
+  // Usage alert notifications
+  async notifyUsageAlert(alert: any): Promise<void> {
+    const percentage = ((alert.currentUsage / alert.limitAmount) * 100).toFixed(1);
+    const alertEmoji = this.getAlertEmoji(alert.alertType);
+
+    const emailData = {
+      to: alert.user.email,
+      subject: `${alertEmoji} Usage Alert: ${alert.metricType} at ${percentage}%`,
+      template: 'usage-alert',
+      data: {
+        userName: alert.user.name || 'there',
+        alertType: alert.alertType,
+        metricType: alert.metricType,
+        currentUsage: alert.currentUsage,
+        limitAmount: alert.limitAmount,
+        percentage,
+        planName: alert.subscription.plan.name,
+        dashboardUrl: `${process.env.FRONTEND_URL}/dashboard/usage`,
+      },
+    };
+
+    await this.sendEmail(emailData);
+
+    // Send Slack notification for critical alerts
+    if (alert.alertType === 'CRITICAL' || alert.alertType === 'EXCEEDED') {
+      await this.sendSlackNotification(
+        `${alertEmoji} Usage Alert: ${alert.user.email} - ${alert.metricType} at ${percentage}% (${alert.currentUsage}/${alert.limitAmount})`,
+        'usage-alerts',
+      );
+    }
+
+    // Update alert as notification sent
+    await prisma.usageAlert.update({
+      where: { id: alert.id },
+      data: { notificationSent: true, emailSent: true },
+    });
+  }
+
+  private getAlertEmoji(alertType: string): string {
+    const emojiMap: Record<string, string> = {
+      WARNING: '⚠️',
+      APPROACHING: '📈',
+      CRITICAL: '🚨',
+      EXCEEDED: '🛑',
+    };
+    return emojiMap[alertType] || '📊';
   }
 }
 
