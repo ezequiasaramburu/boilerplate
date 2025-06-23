@@ -1,4 +1,4 @@
-import type { EmailData, SubscriptionWithPlan } from '@my/types'
+import type { EmailData, SubscriptionWithPlan } from '@my/types';
 
 class NotificationService {
   // Send email notification (placeholder - integrate with your email service)
@@ -9,13 +9,13 @@ class NotificationService {
         to: emailData.to,
         subject: emailData.subject,
         template: emailData.template,
-        timestamp: new Date().toISOString()
-      })
+        timestamp: new Date().toISOString(),
+      });
 
       // In production, replace with actual email service:
       // await emailService.send(emailData)
     } catch (error) {
-      console.error('Failed to send email notification:', error)
+      console.error('Failed to send email notification:', error);
       // Don't throw - email failures shouldn't stop webhook processing
     }
   }
@@ -33,14 +33,17 @@ class NotificationService {
         trialEnd: subscription.trialEnd,
         nextBillingDate: subscription.currentPeriodEnd,
         features: subscription.plan.features || [],
-      }
-    }
+      },
+    };
 
-    await this.sendEmail(emailData)
+    await this.sendEmail(emailData);
   }
 
   // Payment succeeded notification
-  async notifyPaymentSucceeded(subscription: SubscriptionWithPlan, invoiceAmount: number): Promise<void> {
+  async notifyPaymentSucceeded(
+    subscription: SubscriptionWithPlan,
+    invoiceAmount: number,
+  ): Promise<void> {
     const emailData: EmailData = {
       to: subscription.user.email,
       subject: 'Payment Confirmed ✅',
@@ -51,14 +54,17 @@ class NotificationService {
         amount: this.formatAmount(invoiceAmount, subscription.currency),
         nextBillingDate: subscription.currentPeriodEnd,
         invoiceUrl: '#', // TODO: Add invoice URL from Stripe
-      }
-    }
+      },
+    };
 
-    await this.sendEmail(emailData)
+    await this.sendEmail(emailData);
   }
 
   // Payment failed notification
-  async notifyPaymentFailed(subscription: SubscriptionWithPlan, invoiceAmount: number): Promise<void> {
+  async notifyPaymentFailed(
+    subscription: SubscriptionWithPlan,
+    invoiceAmount: number,
+  ): Promise<void> {
     const emailData: EmailData = {
       to: subscription.user.email,
       subject: '⚠️ Payment Failed - Action Required',
@@ -69,10 +75,10 @@ class NotificationService {
         amount: this.formatAmount(invoiceAmount, subscription.currency),
         retryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
         updatePaymentUrl: `${process.env.FRONTEND_URL}/billing/payment-method`,
-      }
-    }
+      },
+    };
 
-    await this.sendEmail(emailData)
+    await this.sendEmail(emailData);
   }
 
   // Subscription canceled notification
@@ -86,15 +92,18 @@ class NotificationService {
         planName: subscription.plan.name,
         accessUntil: subscription.currentPeriodEnd,
         reactivateUrl: `${process.env.FRONTEND_URL}/billing`,
-      }
-    }
+      },
+    };
 
-    await this.sendEmail(emailData)
+    await this.sendEmail(emailData);
   }
 
   // Subscription expiring soon notification
   async notifySubscriptionExpiring(subscription: SubscriptionWithPlan): Promise<void> {
-    const daysLeft = Math.ceil((subscription.currentPeriodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    const millisecondsPerDay = 1000 * 60 * 60 * 24;
+    const daysLeft = Math.ceil(
+      (subscription.currentPeriodEnd.getTime() - Date.now()) / millisecondsPerDay,
+    );
 
     const emailData: EmailData = {
       to: subscription.user.email,
@@ -106,17 +115,20 @@ class NotificationService {
         daysLeft,
         expirationDate: subscription.currentPeriodEnd,
         renewUrl: `${process.env.FRONTEND_URL}/billing`,
-      }
-    }
+      },
+    };
 
-    await this.sendEmail(emailData)
+    await this.sendEmail(emailData);
   }
 
   // Trial ending notification
   async notifyTrialEnding(subscription: SubscriptionWithPlan): Promise<void> {
-    if (!subscription.trialEnd) return
+    if (!subscription.trialEnd) return;
 
-    const daysLeft = Math.ceil((subscription.trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    const millisecondsPerDay = 1000 * 60 * 60 * 24;
+    const daysLeft = Math.ceil(
+      (subscription.trialEnd.getTime() - Date.now()) / millisecondsPerDay,
+    );
 
     const emailData: EmailData = {
       to: subscription.user.email,
@@ -128,16 +140,16 @@ class NotificationService {
         daysLeft,
         trialEndDate: subscription.trialEnd,
         upgradeUrl: `${process.env.FRONTEND_URL}/billing/upgrade`,
-      }
-    }
+      },
+    };
 
-    await this.sendEmail(emailData)
+    await this.sendEmail(emailData);
   }
 
   // Admin notifications for important events
   async notifyAdmin(event: string, data: Record<string, any>): Promise<void> {
-    const adminEmail = process.env.ADMIN_EMAIL
-    if (!adminEmail) return
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) return;
 
     const emailData: EmailData = {
       to: adminEmail,
@@ -147,10 +159,10 @@ class NotificationService {
         event,
         timestamp: new Date().toISOString(),
         ...data,
-      }
-    }
+      },
+    };
 
-    await this.sendEmail(emailData)
+    await this.sendEmail(emailData);
   }
 
   // Webhook processing error notification
@@ -160,7 +172,7 @@ class NotificationService {
       eventId,
       error,
       severity: 'high',
-    })
+    });
   }
 
   // Format amount for display
@@ -168,25 +180,25 @@ class NotificationService {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency.toUpperCase(),
-    }).format(amount / 100)
+    }).format(amount / 100);
   }
 
   // Slack/Discord webhook notification (for team alerts)
   async sendSlackNotification(message: string, channel: string = 'general'): Promise<void> {
     try {
-      const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
-      if (!slackWebhookUrl) return
+      const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
+      if (!slackWebhookUrl) return;
 
       const payload = {
         channel: `#${channel}`,
         text: message,
         username: 'SaaS Bot',
         icon_emoji: ':moneybag:',
-      }
+      };
 
       // TODO: Replace with actual HTTP request
-      console.log('💬 Slack notification:', payload)
-      
+      console.log('💬 Slack notification:', payload);
+
       // In production:
       // await fetch(slackWebhookUrl, {
       //   method: 'POST',
@@ -194,7 +206,7 @@ class NotificationService {
       //   body: JSON.stringify(payload),
       // })
     } catch (error) {
-      console.error('Failed to send Slack notification:', error)
+      console.error('Failed to send Slack notification:', error);
     }
   }
 
@@ -203,13 +215,13 @@ class NotificationService {
     await this.notifyAdmin('Revenue Milestone Reached! 🎉', {
       monthlyRevenue: this.formatAmount(monthlyRevenue, 'usd'),
       milestone: this.formatAmount(milestone, 'usd'),
-    })
+    });
 
     await this.sendSlackNotification(
       `🎉 Revenue milestone reached! Monthly revenue: ${this.formatAmount(monthlyRevenue, 'usd')}`,
-      'revenue'
-    )
+      'revenue',
+    );
   }
 }
 
-export const notificationService = new NotificationService() 
+export const notificationService = new NotificationService();

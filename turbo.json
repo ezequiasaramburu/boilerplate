@@ -10,6 +10,8 @@
       "outputs": [".next/**", "dist/**"]
     },
     "lint": {},
+    "lint:fix": {},
+    "lint:check": {},
     "type-check": {},
     "clean": {
       "cache": false

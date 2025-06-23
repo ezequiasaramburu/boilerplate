@@ -1,17 +1,17 @@
-import Link from "next/link";
-import { cn } from "@/lib/utils";
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 interface HeaderProps {
   title?: string;
   className?: string;
 }
 
-export function Header({ title = "Enterprise App", className }: HeaderProps) {
+export function Header({ title = 'Enterprise App', className }: HeaderProps) {
   return (
     <header
       className={cn(
-        "border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
-        className
+        'border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60',
+        className,
       )}
     >
       <div className="container flex h-14 max-w-screen-2xl items-center">

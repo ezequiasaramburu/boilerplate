@@ -1,105 +1,105 @@
-import 'dotenv/config'
-import express from 'express'
-import session from 'express-session'
-import cookieParser from 'cookie-parser'
-import { connectDb } from '@my/database'
+import 'dotenv/config';
+import express from 'express';
+import session from 'express-session';
+import cookieParser from 'cookie-parser';
+import { connectDb } from '@my/database';
 import {
-  corsMiddleware,
-  securityHeaders,
-  csrfSecurityHeaders,
-  sanitizeInput,
-  requestSizeLimit,
-  ipFilter,
-  globalRateLimit,
   authRateLimit,
-  oauthRateLimit,
-  jwtCSRFProtection,
+  corsMiddleware,
+  csrfSecurityHeaders,
   csrfTokenEndpoint,
-  loggingMiddleware,
   errorHandler,
+  globalRateLimit,
+  ipFilter,
+  jwtCSRFProtection,
+  loggingMiddleware,
   notFoundHandler,
-} from './middleware/index.js'
-import { authenticateToken } from './middleware/auth.middleware.js'
-import passport from './config/passport.config.js'
-import { authRouter } from './routes/auth.js'
-import { socialAuthRouter } from './routes/social-auth.js'
-import { usersRouter } from './routes/users.js'
-import { billingRouter } from './routes/billing.js'
-import webhookAdminRouter from './routes/webhook-admin.js'
+  oauthRateLimit,
+  requestSizeLimit,
+  sanitizeInput,
+  securityHeaders,
+} from './middleware/index.js';
+import { authenticateToken } from './middleware/auth.middleware.js';
+import passport from './config/passport.config.js';
+import { authRouter } from './routes/auth.js';
+import { socialAuthRouter } from './routes/social-auth.js';
+import { usersRouter } from './routes/users.js';
+import { billingRouter } from './routes/billing.js';
+import webhookAdminRouter from './routes/webhook-admin.js';
 
-const app = express()
-const port = process.env.PORT || 4000
+const app = express();
+const port = process.env.PORT;
 
 // Connect to database
-await connectDb()
+await connectDb();
 
 // Core Middleware (order matters!)
-app.set('trust proxy', 1) // Trust first proxy for rate limiting
+app.set('trust proxy', 1); // Trust first proxy for rate limiting
 
 // Security middleware
-app.use(securityHeaders) // Enhanced helmet security
-app.use(corsMiddleware)
-app.use(ipFilter) // IP filtering
-app.use(requestSizeLimit) // Request size limits
+app.use(securityHeaders); // Enhanced helmet security
+app.use(corsMiddleware);
+app.use(ipFilter); // IP filtering
+app.use(requestSizeLimit); // Request size limits
 
 // Rate limiting
-app.use(globalRateLimit) // Apply global rate limit to all routes
+app.use(globalRateLimit); // Apply global rate limit to all routes
 
 // Request parsing
-app.use(express.json({ limit: '10mb' }))
-app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Cookie parsing for CSRF
-app.use(cookieParser())
+app.use(cookieParser());
 
 // Input sanitization
-app.use(sanitizeInput)
+app.use(sanitizeInput);
 
 // CSRF protection headers
-app.use(csrfSecurityHeaders)
+app.use(csrfSecurityHeaders);
 
 // Logging
-app.use(loggingMiddleware)
+app.use(loggingMiddleware);
 
 // Session middleware for Passport
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === 'production' }
-}))
+  cookie: { secure: process.env.NODE_ENV === 'production' },
+}));
 
 // Passport middleware
-app.use(passport.initialize())
-app.use(passport.session())
+app.use(passport.initialize());
+app.use(passport.session());
 
 // API v1 routes with specific rate limiting
-const API_VERSION = '/api/v1'
+const API_VERSION = '/api/v1';
 
 // CSRF token endpoint (public)
-app.get(`${API_VERSION}/csrf-token`, csrfTokenEndpoint)
+app.get(`${API_VERSION}/csrf-token`, csrfTokenEndpoint);
 
 // Apply specific rate limits and CSRF protection to different route groups
-app.use(`${API_VERSION}/auth`, authRateLimit, jwtCSRFProtection, authRouter)
-app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter) // OAuth skips CSRF
-app.use(`${API_VERSION}/users`, authenticateToken, usersRouter)
-app.use(`${API_VERSION}/billing`, authenticateToken, billingRouter)
-app.use(`${API_VERSION}/admin/webhooks`, webhookAdminRouter)
+app.use(`${API_VERSION}/auth`, authRateLimit, jwtCSRFProtection, authRouter);
+app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter); // OAuth skips CSRF
+app.use(`${API_VERSION}/users`, authenticateToken, usersRouter);
+app.use(`${API_VERSION}/billing`, authenticateToken, billingRouter);
+app.use(`${API_VERSION}/admin/webhooks`, webhookAdminRouter);
 
 // Versioned health check
 app.get(`${API_VERSION}/health`, (_, res) => {
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: 'API v1 is running!',
     version: '1.0.0',
-    timestamp: new Date().toISOString()
-  })
-})
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Error handling
-app.use(notFoundHandler)
-app.use(errorHandler)
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 app.listen(port, () => {
-  console.log(`🚀 API listening on http://localhost:${port}`)
-})
+  console.log(`🚀 API listening on http://localhost:${port}`);
+});

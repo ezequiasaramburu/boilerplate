@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { Component, ErrorInfo, ReactNode } from "react";
+import { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -22,7 +22,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
+    // eslint-disable-next-line no-console
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
 
     // Here you could send to error reporting service
     // reportError(error, errorInfo)
@@ -41,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
               Something went wrong
             </h2>
             <p className="text-muted-foreground">
-              We're sorry, but something unexpected happened. Please try
+              We&apos;re sorry, but something unexpected happened. Please try
               refreshing the page.
             </p>
             <button

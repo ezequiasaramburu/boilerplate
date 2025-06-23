@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+.turbo/
+
+# Generated files
+*.d.ts
+.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+
+# Environment files
+.env*
+!.env.example
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Prisma generated files
+packages/database/node_modules/.prisma/
+
+# Package lock files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock 

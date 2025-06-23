@@ -1,10 +1,10 @@
-import { prisma } from '@my/database'
-import { authService } from './auth.service.js'
-import type { 
-  OAuthProfile, 
-  SocialAuthResponse
-} from '@my/types'
-import { Provider } from '@my/types'
+import { prisma } from '@my/database';
+import { authService } from './auth.service.js';
+import {
+  type OAuthProfile,
+  Provider,
+  type SocialAuthResponse,
+} from '@my/types';
 
 export class SocialAuthService {
   async handleOAuthCallback(profile: OAuthProfile): Promise<SocialAuthResponse> {
@@ -14,32 +14,32 @@ export class SocialAuthService {
         where: {
           provider_providerId: {
             provider: profile.provider,
-            providerId: profile.id
-          }
+            providerId: profile.id,
+          },
         },
-        include: { user: true }
-      })
+        include: { user: true },
+      });
 
       if (existingSocialAccount) {
         // User exists with this social account, log them in
-        const tokens = await authService.generateTokens(existingSocialAccount.user)
-        
+        const tokens = await authService.generateTokens(existingSocialAccount.user);
+
         return {
           user: authService.formatUserResponse(existingSocialAccount.user),
           tokens,
-          isNewUser: false
-        }
+          isNewUser: false,
+        };
       }
 
       // Check if user exists with this email
-      let user = null
+      let user = null;
       if (profile.email) {
         user = await prisma.user.findUnique({
-          where: { email: profile.email }
-        })
+          where: { email: profile.email },
+        });
       }
 
-      let isNewUser = false
+      let isNewUser = false;
 
       if (!user) {
         // Create new user
@@ -50,9 +50,9 @@ export class SocialAuthService {
             avatar: profile.avatar,
             // No password for social-only users
             // emailVerified will use default value from schema
-          }
-        })
-        isNewUser = true
+          },
+        });
+        isNewUser = true;
       }
 
       // Link social account to user
@@ -63,28 +63,28 @@ export class SocialAuthService {
           email: profile.email,
           name: profile.name,
           avatar: profile.avatar,
-          userId: user.id
-        }
-      })
+          userId: user.id,
+        },
+      });
 
       // Update user avatar if they don't have one
       if (!user.avatar && profile.avatar) {
         user = await prisma.user.update({
           where: { id: user.id },
-          data: { avatar: profile.avatar }
-        })
+          data: { avatar: profile.avatar },
+        });
       }
 
-      const tokens = await authService.generateTokens(user)
+      const tokens = await authService.generateTokens(user);
 
       return {
         user: authService.formatUserResponse(user),
         tokens,
-        isNewUser
-      }
+        isNewUser,
+      };
     } catch (error) {
-      console.error('Social auth error:', error)
-      throw new Error('Social authentication failed')
+      console.error('Social auth error:', error);
+      throw new Error('Social authentication failed');
     }
   }
 
@@ -94,17 +94,17 @@ export class SocialAuthService {
       where: {
         provider_providerId: {
           provider: profile.provider,
-          providerId: profile.id
-        }
-      }
-    })
+          providerId: profile.id,
+        },
+      },
+    });
 
     if (existingSocialAccount && existingSocialAccount.userId !== userId) {
-      throw new Error('This social account is already linked to another user')
+      throw new Error('This social account is already linked to another user');
     }
 
     if (existingSocialAccount && existingSocialAccount.userId === userId) {
-      throw new Error('This social account is already linked to your account')
+      throw new Error('This social account is already linked to your account');
     }
 
     // Link the social account
@@ -115,35 +115,35 @@ export class SocialAuthService {
         email: profile.email,
         name: profile.name,
         avatar: profile.avatar,
-        userId
-      }
-    })
+        userId,
+      },
+    });
   }
 
   async unlinkSocialAccount(userId: string, provider: Provider): Promise<void> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { socialAccounts: true }
-    })
+      include: { socialAccounts: true },
+    });
 
     if (!user) {
-      throw new Error('User not found')
+      throw new Error('User not found');
     }
 
     // Check if user has password or other social accounts
-    const hasPassword = !!user.password
-    const otherSocialAccounts = user.socialAccounts.filter(acc => acc.provider !== provider)
+    const hasPassword = !!user.password;
+    const otherSocialAccounts = user.socialAccounts.filter(acc => acc.provider !== provider);
 
     if (!hasPassword && otherSocialAccounts.length === 0) {
-      throw new Error('Cannot unlink the only authentication method. Please set a password first.')
+      throw new Error('Cannot unlink the only authentication method. Please set a password first.');
     }
 
     await prisma.socialAccount.deleteMany({
       where: {
         userId,
-        provider
-      }
-    })
+        provider,
+      },
+    });
   }
 
   async getUserSocialAccounts(userId: string) {
@@ -155,9 +155,9 @@ export class SocialAuthService {
         email: true,
         name: true,
         avatar: true,
-        createdAt: true
-      }
-    })
+        createdAt: true,
+      },
+    });
   }
 
   // Helper method to format OAuth profiles from different providers
@@ -168,8 +168,8 @@ export class SocialAuthService {
       email: profile.emails?.[0]?.value,
       name: profile.displayName,
       avatar: profile.photos?.[0]?.value,
-      username: profile.username
-    }
+      username: profile.username,
+    };
   }
 
   formatGitHubProfile(profile: any): OAuthProfile {
@@ -179,8 +179,8 @@ export class SocialAuthService {
       email: profile.emails?.[0]?.value,
       name: profile.displayName || profile.username,
       avatar: profile.photos?.[0]?.value,
-      username: profile.username
-    }
+      username: profile.username,
+    };
   }
 
   formatFacebookProfile(profile: any): OAuthProfile {
@@ -190,8 +190,8 @@ export class SocialAuthService {
       email: profile.emails?.[0]?.value,
       name: profile.displayName,
       avatar: profile.photos?.[0]?.value,
-      username: profile.username
-    }
+      username: profile.username,
+    };
   }
 
   formatLinkedInProfile(profile: any): OAuthProfile {
@@ -201,8 +201,8 @@ export class SocialAuthService {
       email: profile.emails?.[0]?.value,
       name: profile.displayName,
       avatar: profile.photos?.[0]?.value,
-      username: profile.username
-    }
+      username: profile.username,
+    };
   }
 
   formatDiscordProfile(profile: any): OAuthProfile {
@@ -211,10 +211,10 @@ export class SocialAuthService {
       provider: Provider.DISCORD,
       email: profile.email,
       name: profile.username,
-      avatar: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : null,
-      username: profile.username
-    }
+      avatar: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : undefined,
+      username: profile.username,
+    };
   }
 }
 
-export const socialAuthService = new SocialAuthService() 
+export const socialAuthService = new SocialAuthService();

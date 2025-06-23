@@ -2,6 +2,11 @@
   "name": "@my/types",
   "private": true,
   "type": "module",
+  "scripts": {
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "type-check": "tsc --noEmit"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",

@@ -1,5 +1,5 @@
-import rateLimit from 'express-rate-limit'
-import type { Request, Response } from 'express'
+import rateLimit from 'express-rate-limit';
+import type { Request, Response } from 'express';
 
 // Rate limit error response
 const rateLimitHandler = (req: Request, res: Response) => {
@@ -7,9 +7,9 @@ const rateLimitHandler = (req: Request, res: Response) => {
     success: false,
     message: 'Too many requests. Please try again later.',
     error: 'RATE_LIMIT_EXCEEDED',
-    retryAfter: Math.round((req as any).rateLimit?.resetTime || Date.now() / 1000)
-  })
-}
+    retryAfter: Math.round((req as any).rateLimit?.resetTime || Date.now() / 1000),
+  });
+};
 
 // Global rate limit - applies to all endpoints
 export const globalRateLimit = rateLimit({
@@ -18,11 +18,11 @@ export const globalRateLimit = rateLimit({
   message: rateLimitHandler,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
+  skip: req => {
     // Skip rate limiting for health checks
-    return req.path === '/health' || req.path === '/api/v1/health'
-  }
-})
+    return req.path === '/health' || req.path === '/api/v1/health';
+  },
+});
 
 // Strict rate limit for authentication endpoints
 export const authRateLimit = rateLimit({
@@ -32,7 +32,7 @@ export const authRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful requests
-})
+});
 
 // More lenient rate limit for authenticated users
 export const authenticatedRateLimit = rateLimit({
@@ -41,7 +41,7 @@ export const authenticatedRateLimit = rateLimit({
   message: rateLimitHandler,
   standardHeaders: true,
   legacyHeaders: false,
-})
+});
 
 // Very strict rate limit for password reset and sensitive operations
 export const sensitiveRateLimit = rateLimit({
@@ -50,7 +50,7 @@ export const sensitiveRateLimit = rateLimit({
   message: rateLimitHandler,
   standardHeaders: true,
   legacyHeaders: false,
-})
+});
 
 // OAuth rate limit - prevent OAuth abuse
 export const oauthRateLimit = rateLimit({
@@ -59,7 +59,7 @@ export const oauthRateLimit = rateLimit({
   message: rateLimitHandler,
   standardHeaders: true,
   legacyHeaders: false,
-})
+});
 
 // Registration rate limit - prevent spam registrations
 export const registrationRateLimit = rateLimit({
@@ -68,4 +68,4 @@ export const registrationRateLimit = rateLimit({
   message: rateLimitHandler,
   standardHeaders: true,
   legacyHeaders: false,
-}) 
+});

@@ -1,17 +1,17 @@
-import Stripe from 'stripe'
-import { prisma } from '@my/database'
-import type { 
+import Stripe from 'stripe';
+import { prisma } from '@my/database';
+import type {
+  BillingInterval,
   CreateCheckoutSessionRequest,
   CreateCheckoutSessionResponse,
   CreatePortalSessionRequest,
   CreatePortalSessionResponse,
+  SubscriptionStatus,
   SubscriptionUsage,
-  BillingInterval,
-  SubscriptionStatus
-} from '@my/types'
+} from '@my/types';
 
 class StripeService {
-  private stripe: Stripe | null = null
+  private stripe: Stripe | null = null;
 
   constructor() {
     // Don't initialize Stripe immediately - wait until it's needed
@@ -19,11 +19,11 @@ class StripeService {
 
   private initializeStripe(): Stripe {
     if (this.stripe) {
-      return this.stripe
+      return this.stripe;
     }
 
-    let stripeSecretKey = process.env.STRIPE_SECRET_KEY
-    
+    let stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+
     // For development, allow a dummy key to prevent initialization errors
     if (!stripeSecretKey) {
       if (process.env.NODE_ENV === 'development') {
@@ -36,10 +36,10 @@ class StripeService {
           STRIPE_WEBHOOK_SECRET=whsec_your_secret
           
           Using dummy key for now...
-        `)
-        stripeSecretKey = 'sk_test_dummy_key_for_development'
+        `);
+        stripeSecretKey = 'sk_test_dummy_key_for_development';
       } else {
-        throw new Error('STRIPE_SECRET_KEY environment variable is required for billing operations')
+        throw new Error('STRIPE_SECRET_KEY environment variable is required for billing operations');
       }
     }
 
@@ -47,34 +47,34 @@ class StripeService {
       this.stripe = new Stripe(stripeSecretKey, {
         apiVersion: '2025-05-28.basil', // Latest API version
         typescript: true,
-      })
+      });
     } catch (error) {
       if (process.env.NODE_ENV === 'development' && stripeSecretKey === 'sk_test_dummy_key_for_development') {
-        console.warn('Stripe initialized with dummy key - billing features disabled')
+        console.warn('Stripe initialized with dummy key - billing features disabled');
         // Create a dummy Stripe object for development
-        this.stripe = {} as Stripe
+        this.stripe = {} as Stripe;
       } else {
-        throw error
+        throw error;
       }
     }
 
-    return this.stripe
+    return this.stripe;
   }
 
   // Create checkout session for subscription
   async createCheckoutSession(
     userId: string,
-    request: CreateCheckoutSessionRequest
+    request: CreateCheckoutSessionRequest,
   ): Promise<CreateCheckoutSessionResponse> {
     try {
-      const stripe = this.initializeStripe()
-      
+      const stripe = this.initializeStripe();
+
       // Get or create Stripe customer
-      const customer = await this.getOrCreateCustomer(userId)
+      const customer = await this.getOrCreateCustomer(userId);
 
       // Default URLs
-      const successUrl = request.successUrl || `${process.env.FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`
-      const cancelUrl = request.cancelUrl || `${process.env.FRONTEND_URL}/billing/cancel`
+      const successUrl = request.successUrl || `${process.env.FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = request.cancelUrl || `${process.env.FRONTEND_URL}/billing/cancel`;
 
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         customer: customer.id,
@@ -94,68 +94,70 @@ class StripeService {
           userId,
           ...request.metadata,
         },
-      }
+      };
 
       // Add trial if specified
       if (request.trialDays && request.trialDays > 0) {
         sessionParams.subscription_data = {
           trial_period_days: request.trialDays,
-        }
+        };
       }
 
-      const session = await stripe.checkout.sessions.create(sessionParams)
+      const session = await stripe.checkout.sessions.create(sessionParams);
 
       if (!session.url) {
-        throw new Error('Failed to create checkout session URL')
+        throw new Error('Failed to create checkout session URL');
       }
 
       return {
         sessionId: session.id,
         url: session.url,
-      }
+      };
     } catch (error) {
-      console.error('Error creating checkout session:', error)
-      throw new Error('Failed to create checkout session')
+      console.error('Error creating checkout session:', error);
+      throw new Error('Failed to create checkout session');
     }
   }
 
   // Create customer portal session
   async createPortalSession(
     userId: string,
-    request: CreatePortalSessionRequest
+    request: CreatePortalSessionRequest,
   ): Promise<CreatePortalSessionResponse> {
     try {
-      const stripe = this.initializeStripe()
-      
+      const stripe = this.initializeStripe();
+
       // Get Stripe customer
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { stripeCustomerId: true },
-      })
+      });
 
       if (!user?.stripeCustomerId) {
-        throw new Error('User does not have a Stripe customer ID')
+        throw new Error('User does not have a Stripe customer ID');
       }
 
-      const returnUrl = request.returnUrl || `${process.env.FRONTEND_URL}/billing`
+      const returnUrl = request.returnUrl || `${process.env.FRONTEND_URL}/billing`;
 
       const session = await stripe.billingPortal.sessions.create({
         customer: user.stripeCustomerId,
         return_url: returnUrl,
-      })
+      });
 
       return {
         url: session.url,
-      }
+      };
     } catch (error) {
-      console.error('Error creating portal session:', error)
-      throw new Error('Failed to create customer portal session')
+      console.error('Error creating portal session:', error);
+      throw new Error('Failed to create customer portal session');
     }
   }
 
   // Get or create Stripe customer
   async getOrCreateCustomer(userId: string): Promise<Stripe.Customer> {
     try {
+      const stripe = this.initializeStripe();
+
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -164,43 +166,43 @@ class StripeService {
           name: true,
           stripeCustomerId: true,
         },
-      })
+      });
 
       if (!user) {
-        throw new Error('User not found')
+        throw new Error('User not found');
       }
 
       // Return existing customer if available
       if (user.stripeCustomerId) {
         try {
-          const customer = await this.stripe.customers.retrieve(user.stripeCustomerId)
+          const customer = await stripe.customers.retrieve(user.stripeCustomerId);
           if (customer && !customer.deleted) {
-            return customer as Stripe.Customer
+            return customer as Stripe.Customer;
           }
         } catch (error) {
-          console.warn('Stripe customer not found, creating new one:', error)
+          console.warn('Stripe customer not found, creating new one:', error);
         }
       }
 
       // Create new customer
-      const customer = await this.stripe.customers.create({
+      const customer = await stripe.customers.create({
         email: user.email,
         name: user.name || undefined,
         metadata: {
           userId: user.id,
         },
-      })
+      });
 
       // Update user with new customer ID
       await prisma.user.update({
         where: { id: userId },
         data: { stripeCustomerId: customer.id },
-      })
+      });
 
-      return customer
+      return customer;
     } catch (error) {
-      console.error('Error getting/creating customer:', error)
-      throw new Error('Failed to get or create Stripe customer')
+      console.error('Error getting/creating customer:', error);
+      throw new Error('Failed to get or create Stripe customer');
     }
   }
 
@@ -220,10 +222,10 @@ class StripeService {
         orderBy: {
           createdAt: 'desc',
         },
-      })
+      });
 
       if (!subscription) {
-        return null
+        return null;
       }
 
       // TODO: Implement actual usage tracking
@@ -236,7 +238,10 @@ class StripeService {
         usageStats: {
           users: { current: 1, limit: subscription.plan.maxUsers || undefined },
           projects: { current: 3, limit: subscription.plan.maxProjects || undefined },
-          storage: { current: 250 * 1024 * 1024, limit: subscription.plan.maxStorage ? Number(subscription.plan.maxStorage) : undefined },
+          storage: {
+            current: 250 * 1024 * 1024,
+            limit: subscription.plan.maxStorage ? Number(subscription.plan.maxStorage) : undefined,
+          },
         },
         billingInfo: {
           amount: subscription.amount,
@@ -244,16 +249,18 @@ class StripeService {
           interval: subscription.interval as BillingInterval,
           nextBillingDate: subscription.currentPeriodEnd,
         },
-      }
+      };
     } catch (error) {
-      console.error('Error getting subscription usage:', error)
-      throw new Error('Failed to get subscription usage')
+      console.error('Error getting subscription usage:', error);
+      throw new Error('Failed to get subscription usage');
     }
   }
 
   // Cancel subscription
   async cancelSubscription(userId: string, cancelAtPeriodEnd: boolean = true): Promise<void> {
     try {
+      const stripe = this.initializeStripe();
+
       const subscription = await prisma.subscription.findFirst({
         where: {
           userId,
@@ -261,25 +268,25 @@ class StripeService {
             in: ['ACTIVE', 'TRIALING'],
           },
         },
-      })
+      });
 
       if (!subscription) {
-        throw new Error('No active subscription found')
+        throw new Error('No active subscription found');
       }
 
       if (cancelAtPeriodEnd) {
         // Cancel at period end
-        await this.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+        await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
           cancel_at_period_end: true,
-        })
+        });
 
         await prisma.subscription.update({
           where: { id: subscription.id },
           data: { cancelAtPeriodEnd: true },
-        })
+        });
       } else {
         // Cancel immediately
-        await this.stripe.subscriptions.cancel(subscription.stripeSubscriptionId)
+        await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
 
         await prisma.subscription.update({
           where: { id: subscription.id },
@@ -287,39 +294,41 @@ class StripeService {
             status: 'CANCELED',
             canceledAt: new Date(),
           },
-        })
+        });
       }
     } catch (error) {
-      console.error('Error canceling subscription:', error)
-      throw new Error('Failed to cancel subscription')
+      console.error('Error canceling subscription:', error);
+      throw new Error('Failed to cancel subscription');
     }
   }
 
   // Reactivate subscription
   async reactivateSubscription(userId: string): Promise<void> {
     try {
+      const stripe = this.initializeStripe();
+
       const subscription = await prisma.subscription.findFirst({
         where: {
           userId,
           cancelAtPeriodEnd: true,
         },
-      })
+      });
 
       if (!subscription) {
-        throw new Error('No subscription to reactivate')
+        throw new Error('No subscription to reactivate');
       }
 
-      await this.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+      await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
         cancel_at_period_end: false,
-      })
+      });
 
       await prisma.subscription.update({
         where: { id: subscription.id },
         data: { cancelAtPeriodEnd: false },
-      })
+      });
     } catch (error) {
-      console.error('Error reactivating subscription:', error)
-      throw new Error('Failed to reactivate subscription')
+      console.error('Error reactivating subscription:', error);
+      throw new Error('Failed to reactivate subscription');
     }
   }
 
@@ -329,16 +338,16 @@ class StripeService {
       const plans = await prisma.subscriptionPlan.findMany({
         where: { active: true },
         orderBy: { amount: 'asc' },
-      })
+      });
 
       return plans.map(plan => ({
         ...plan,
         features: plan.features ? (plan.features as string[]) : [],
         formattedAmount: this.formatAmount(plan.amount, plan.currency),
-      }))
+      }));
     } catch (error) {
-      console.error('Error getting subscription plans:', error)
-      throw new Error('Failed to get subscription plans')
+      console.error('Error getting subscription plans:', error);
+      throw new Error('Failed to get subscription plans');
     }
   }
 
@@ -347,13 +356,13 @@ class StripeService {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency.toUpperCase(),
-    }).format(amount / 100)
+    }).format(amount / 100);
   }
 
   // Get Stripe instance (for webhook handling)
   getStripeInstance(): Stripe {
-    return this.stripe
+    return this.initializeStripe();
   }
 }
 
-export const stripeService = new StripeService() 
+export const stripeService = new StripeService();
