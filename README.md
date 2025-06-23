@@ -1,6 +1,6 @@
-# Full-Stack Monorepo Boilerplate
+# Enterprise Full-Stack Monorepo
 
-A production-ready monorepo boilerplate built with TypeScript, featuring a Next.js frontend, Express.js API, and PostgreSQL database.
+A production-ready monorepo boilerplate built with TypeScript, featuring a Next.js frontend, Express.js API, PostgreSQL database, and comprehensive usage-based billing system.
 
 ## 🚀 **Tech Stack**
 
@@ -19,6 +19,8 @@ A production-ready monorepo boilerplate built with TypeScript, featuring a Next.
 - **TypeScript** - Type safety
 - **Prisma** - Database ORM
 - **PostgreSQL** - Database
+- **Stripe** - Payment processing
+- **JWT** - Authentication
 
 ### **Shared Packages**
 
@@ -38,27 +40,32 @@ A production-ready monorepo boilerplate built with TypeScript, featuring a Next.
 
 ```
 boilerplate/
+├── .env                     # 🔑 Single environment file (root)
+├── package.json             # 🎛️ Root orchestrator
+├── turbo.json              # ⚡ Turbo configuration
+├── tsconfig.base.json      # 📝 Base TypeScript config
+├── pnpm-workspace.yaml     # 📦 Workspace configuration
 ├── apps/
-│   ├── api/                 # Express.js API
+│   ├── api/                # 🔧 Express.js API
 │   │   ├── src/
-│   │   │   ├── middleware/  # API middleware
-│   │   │   ├── routes/      # API routes
-│   │   │   └── index.ts     # API entry point
+│   │   │   ├── controllers/
+│   │   │   ├── middleware/
+│   │   │   ├── routes/
+│   │   │   ├── services/
+│   │   │   └── index.ts
 │   │   └── package.json
-│   └── web/                 # Next.js frontend
-│       ├── pages/           # Next.js pages
-│       ├── styles/          # Global styles
+│   └── web/                # 🌐 Next.js frontend
+│       ├── src/
+│       ├── pages/
 │       └── package.json
-├── packages/
-│   ├── database/            # Prisma database package
-│   │   ├── prisma/          # Database schema & migrations
-│   │   └── src/             # Database utilities
-│   ├── types/               # Shared TypeScript types & Zod schemas
-│   ├── ui/                  # Shared UI components (shadcn/ui)
-│   └── utils/               # Shared utilities
-├── package.json             # Root package.json
-├── turbo.json              # Turbo configuration
-└── tsconfig.base.json      # Base TypeScript configuration
+└── packages/
+    ├── database/           # 🗄️ Prisma database
+    │   ├── prisma/
+    │   ├── src/
+    │   └── package.json
+    ├── types/              # 📋 Shared types
+    ├── ui/                 # 🎨 UI components
+    └── utils/              # 🛠️ Utilities
 ```
 
 ## 🛠️ **Quick Start**
@@ -67,7 +74,7 @@ boilerplate/
 
 - Node.js 18+
 - pnpm
-- PostgreSQL database running on your machine
+- PostgreSQL database
 
 ### **1. Clone & Install**
 
@@ -79,261 +86,276 @@ pnpm install
 
 ### **2. Environment Setup**
 
-In a monorepo, you need environment files in specific locations:
+**🎯 Single Environment File Approach**
+
+Create a single `.env` file in the project root:
 
 ```bash
-# 1. Create API environment file
-cp apps/api/env.example apps/api/.env
-
-# 2. Create database environment file
-echo 'DATABASE_URL="postgresql://username:password@localhost:5432/your_database_name"' > packages/database/.env
+# Copy the example file
+cp env.example .env
 ```
 
-**Update both `.env` files with your actual values:**
-
-**`apps/api/.env`** (main API configuration):
+**Edit `.env` with your actual values:**
 
 ```env
-DATABASE_URL="postgresql://postgres:password@localhost:5432/your_database_name"
-JWT_SECRET=your-super-secret-jwt-key-here
-STRIPE_SECRET_KEY=sk_test_... # Optional
-# ... other values from env.example
+# =============================================================================
+# DATABASE (Required)
+# =============================================================================
+DATABASE_URL="postgresql://username:password@localhost:5432/your_database_name"
+
+# =============================================================================
+# API SERVER
+# =============================================================================
+PORT=4000
+HOST=localhost
+NODE_ENV=development
+
+# Authentication (Required)
+JWT_SECRET=your-super-secret-jwt-key-that-is-long-enough-for-security-purposes-64-chars
+JWT_REFRESH_SECRET=your-super-secret-refresh-key-that-is-long-enough-for-security-purposes-64-chars
+
+# Stripe (Optional for development)
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key_here
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here
+
+# =============================================================================
+# WEB APP
+# =============================================================================
+NEXT_PUBLIC_API_URL=http://localhost:4000
+NEXT_PUBLIC_APP_NAME=Enterprise App
 ```
 
-**`packages/database/.env`** (for Prisma CLI):
+> **✅ Why Single .env?** All packages read from the root `.env` file. No more scattered environment files!
 
-```env
-DATABASE_URL="postgresql://postgres:password@localhost:5432/your_database_name"
-```
-
-### **3. Database Setup** (Run in order!)
+### **3. Database Setup**
 
 ```bash
-# 1. Create tables in your database
-pnpm db:push
-
-# 2. Generate TypeScript client code
+# 1. Generate Prisma client
 pnpm db:generate
 
-# 3. (Optional) Add sample subscription plans
+# 2. Push schema to database
+pnpm db:push
+
+# 3. (Optional) Seed with sample data
 pnpm db:seed
 
-# 4. (Optional) View your data in browser
+# 4. (Optional) Open database browser
 pnpm db:studio
 ```
-
-> **Important**: Run `db:push` first, then `db:generate`. The push creates tables, generate creates TypeScript types.
 
 ### **4. Start Development**
 
 ```bash
+# Start everything (API + Web)
 pnpm dev
+
+# Or start individually
+pnpm dev:api    # API only (http://localhost:4000)
+pnpm dev:web    # Web only (http://localhost:3000)
 ```
-
-This starts:
-
-- **API**: http://localhost:4000
-- **Web**: http://localhost:3000
 
 ### **5. Verify Setup**
 
-- Visit http://localhost:4000/health - should return `{"success": true}`
-- Visit http://localhost:3000 - should load the Next.js app
-- Visit http://localhost:5555 (if you ran `db:studio`) - browse your database
+- **API Health**: http://localhost:4000/health
+- **Web App**: http://localhost:3000
+- **Database**: http://localhost:5555 (if running `db:studio`)
 
-## 📝 **Available Scripts**
+## 📝 **Commands Reference**
 
-### **🚀 Development**
+### **🚀 Development Commands**
+
+| Command          | Description    | Scope |
+| ---------------- | -------------- | ----- |
+| `pnpm dev`       | Start all apps | All   |
+| `pnpm dev:api`   | Start API only | API   |
+| `pnpm dev:web`   | Start web only | Web   |
+| `pnpm build`     | Build all apps | All   |
+| `pnpm build:api` | Build API only | API   |
+| `pnpm build:web` | Build web only | Web   |
+
+### **🗄️ Database Commands**
+
+| Command            | Description             | Target   |
+| ------------------ | ----------------------- | -------- |
+| `pnpm db:generate` | Generate Prisma client  | Database |
+| `pnpm db:push`     | Push schema to DB (dev) | Database |
+| `pnpm db:migrate`  | Run migrations (prod)   | Database |
+| `pnpm db:studio`   | Open database browser   | Database |
+| `pnpm db:seed`     | Seed sample data        | Database |
+| `pnpm db:reset`    | Reset database          | Database |
+| `pnpm db:deploy`   | Deploy migrations       | Database |
+
+### **🔧 Code Quality Commands**
+
+| Command             | Description        | Scope |
+| ------------------- | ------------------ | ----- |
+| `pnpm lint`         | Lint all packages  | All   |
+| `pnpm lint:fix`     | Fix linting issues | All   |
+| `pnpm type-check`   | TypeScript check   | All   |
+| `pnpm format`       | Format code        | All   |
+| `pnpm format:check` | Check formatting   | All   |
+
+### **📦 Package Management**
+
+| Command            | Description               | Scope |
+| ------------------ | ------------------------- | ----- |
+| `pnpm install`     | Install dependencies      | All   |
+| `pnpm setup`       | Full setup (install + db) | All   |
+| `pnpm reset`       | Clean + install + db      | All   |
+| `pnpm clean`       | Clean build artifacts     | All   |
+| `pnpm deps:check`  | Check for vulnerabilities | All   |
+| `pnpm deps:update` | Update dependencies       | All   |
+
+### **🎯 Individual Package Commands**
 
 ```bash
-pnpm dev              # Start all apps in development mode (API + Web)
-pnpm build            # Build all apps for production
-pnpm lint             # Lint all packages
-pnpm type-check       # Type check all packages
-pnpm clean            # Clean build artifacts
+# Work directly with specific packages
+cd apps/api
+pnpm dev              # Start API server
+pnpm build            # Build API
+pnpm lint             # Lint API code
+
+cd apps/web
+pnpm dev              # Start web app
+pnpm build            # Build web app
+pnpm lint             # Lint web code
+
+cd packages/database
+pnpm generate         # Generate Prisma client
+pnpm push             # Push schema to DB
+pnpm studio           # Open Prisma Studio
 ```
 
-### **🗄️ Database Management**
+## 🏗️ **Architecture Overview**
 
-```bash
-pnpm db:push          # Push schema to database (development)
-pnpm db:generate      # Generate Prisma client types
-pnpm db:migrate       # Run database migrations (production)
-pnpm db:studio        # Open Prisma Studio (database browser)
-pnpm db:seed          # Seed database with sample subscription plans
+### **🎛️ Monorepo Structure**
+
+- **Root `package.json`**: Orchestrates all commands using Turbo
+- **Individual `package.json`**: Each package manages its own dependencies
+- **Turbo**: Handles caching, parallelization, and task dependencies
+- **pnpm Workspaces**: Manages package linking and installation
+
+### **🔄 Command Flow**
+
+```
+Root Command → Turbo → Individual Package → Actual Tool
+pnpm db:push → turbo run push --filter=@my/database → cd packages/database && pnpm push → prisma db push
 ```
 
-### **⚙️ Setup & Installation**
+### **🌍 Environment Variables**
 
-```bash
-pnpm install:packages # Install all dependencies
-pnpm setup            # Full setup: install deps + generate Prisma client
-```
-
-### **📦 Individual Package Scripts**
-
-```bash
-# Run scripts in specific packages
-pnpm --filter api dev           # Start only API server
-pnpm --filter web dev           # Start only web app
-pnpm --filter @my/database <script>  # Run database package scripts
-```
-
-> **💡 Pro tip**: Most scripts use Turbo to run across all packages in parallel for maximum speed!
-
-## 🏗️ **API Endpoints**
-
-### **🏥 Health & Monitoring**
-
-- `GET /health` - API health check
-- `GET /api/v1/health` - Versioned health check
-- `GET /api/v1/admin/webhooks/stats` - Webhook processing statistics (Admin)
-- `GET /api/v1/admin/webhooks/health` - Webhook system health (Admin)
-
-### **🔐 Authentication**
-
-- `POST /api/v1/auth/register` - User registration
-- `POST /api/v1/auth/login` - User login
-- `POST /api/v1/auth/refresh` - Refresh access token
-- `POST /api/v1/auth/logout` - Logout current session
-- `POST /api/v1/auth/logout-all` - Logout all sessions
-- `GET /api/v1/auth/profile` - Get user profile
-- `POST /api/v1/auth/change-password` - Change password
-
-### **🔗 Social Authentication**
-
-- `GET /api/v1/auth/oauth/google` - Initiate Google OAuth
-- `GET /api/v1/auth/oauth/github` - Initiate GitHub OAuth
-- `GET /api/v1/auth/oauth/google/callback` - Google OAuth callback
-- `GET /api/v1/auth/oauth/github/callback` - GitHub OAuth callback
-- `GET /api/v1/auth/oauth/accounts` - Get linked social accounts
-- `DELETE /api/v1/auth/oauth/accounts/:provider` - Unlink social account
-
-### **👥 Users**
-
-- `GET /api/v1/users` - Get all users (with pagination, protected)
-- `GET /api/v1/users/:id` - Get user by ID (protected)
-- `PUT /api/v1/users/:id` - Update user (protected)
-- `DELETE /api/v1/users/:id` - Delete user (protected)
-
-### **💳 Billing & Subscriptions**
-
-- `GET /api/v1/billing/plans` - Get available subscription plans
-- `POST /api/v1/billing/checkout` - Create Stripe checkout session
-- `POST /api/v1/billing/portal` - Create customer portal session
-- `GET /api/v1/billing/subscription` - Get user's subscription & usage
-- `POST /api/v1/billing/subscription/cancel` - Cancel subscription
-- `POST /api/v1/billing/subscription/reactivate` - Reactivate subscription
-
-### **🪝 Webhooks**
-
-- `POST /webhooks/stripe` - Stripe webhook endpoint (public)
-
-### **🛡️ Security**
-
-- `GET /api/v1/csrf-token` - Get CSRF token
-
-## 🎨 **UI Components**
-
-The `@my/ui` package includes:
-
-- **Button** - Customizable button component with variants
-- **Utilities** - `cn()` function for class merging
-- **More components** - Easy to add shadcn/ui components
-
-## 🔧 **Configuration**
-
-### **Database**
-
-Update your database schema in `packages/database/prisma/schema.prisma`
-
-### **Environment Variables**
-
-- `DATABASE_URL` - PostgreSQL connection string
-- `PORT` - API server port (default: 4000)
-- `NODE_ENV` - Environment (development/production)
-- `NEXT_PUBLIC_API_URL` - API URL for frontend
-- `FRONTEND_URL` - Frontend URL for CORS
-
-### **Adding New Packages**
-
-1. Create new package in `packages/`
-2. Add to `pnpm-workspace.yaml`
-3. Update `tsconfig.base.json` paths
-4. Import in apps using `@my/package-name`
+- **Single Source**: Root `.env` file
+- **Turbo Integration**: `globalEnv` ensures cache invalidation
+- **Package Access**: All packages read from root `.env`
+- **No Duplication**: No scattered `.env` files
 
 ## 🧪 **Features**
 
 ### **🏗️ Architecture**
 
-- ✅ **Full-stack TypeScript** - Type safety across frontend and backend
 - ✅ **Monorepo Structure** - Turbo + pnpm workspaces
-- ✅ **Shared Packages** - Reusable UI, types, database, and utilities
-- ✅ **ES Modules** - Modern JavaScript modules throughout
+- ✅ **Shared Packages** - Reusable UI, types, database utilities
+- ✅ **Type Safety** - End-to-end TypeScript
+- ✅ **Modern ES Modules** - Latest JavaScript standards
 
 ### **🔐 Authentication & Security**
 
-- ✅ **JWT Authentication** - Access & refresh tokens with role-based permissions
-- ✅ **Social OAuth** - Google & GitHub login with Passport.js
-- ✅ **Multi-layer Security** - Helmet, CORS, CSRF protection, XSS sanitization
-- ✅ **Rate Limiting** - Global and endpoint-specific rate limiting
-- ✅ **Input Validation** - Zod schemas for request validation
+- ✅ **JWT Authentication** - Access & refresh tokens
+- ✅ **Social OAuth** - Google & GitHub integration
+- ✅ **Role-based Access** - User permissions system
+- ✅ **Security Middleware** - Helmet, CORS, CSRF, rate limiting
 
-### **💳 Payment & Billing**
+### **💳 Billing & Usage Tracking**
 
-- ✅ **Stripe Integration** - Checkout, subscriptions, customer portal
-- ✅ **Webhook Handling** - Robust payment event processing with retries
-- ✅ **Subscription Management** - Multiple plans with usage tracking
-- ✅ **Email Notifications** - Payment confirmations, failures, and alerts
+- ✅ **Stripe Integration** - Complete payment processing
+- ✅ **Usage-based Billing** - Track multiple metrics
+- ✅ **Subscription Management** - Multiple plans and tiers
+- ✅ **Real-time Alerts** - Usage threshold notifications
+- ✅ **Webhook Processing** - Robust event handling
 
-### **🗄️ Database & ORM**
+### **🗄️ Database**
 
-- ✅ **Prisma ORM** - Type-safe database access with PostgreSQL
-- ✅ **Database Seeding** - Sample data for development
-- ✅ **Schema Management** - Version-controlled database schema
-- ✅ **Prisma Studio** - Visual database browser
+- ✅ **Prisma ORM** - Type-safe database access
+- ✅ **PostgreSQL** - Production-ready database
+- ✅ **Migration System** - Version-controlled schema
+- ✅ **Seeding** - Sample data for development
 
-### **🎨 Frontend & UI**
+### **🎨 Frontend**
 
-- ✅ **Next.js 14** - App Router with React 18
-- ✅ **shadcn/ui** - Beautiful, accessible UI components
-- ✅ **Tailwind CSS** - Utility-first styling with dark mode
+- ✅ **Next.js 14** - Latest React framework
+- ✅ **shadcn/ui** - Beautiful, accessible components
+- ✅ **Tailwind CSS** - Utility-first styling
 - ✅ **Error Boundaries** - Graceful error handling
-- ✅ **Loading States** - Professional loading components
 
 ### **🔧 Developer Experience**
 
-- ✅ **Hot Reload** - Development hot reload for all apps
-- ✅ **TypeScript Strict** - Maximum type safety
-- ✅ **ESLint & Prettier** - Code quality and formatting
-- ✅ **Environment Management** - Proper env file organization
-- ✅ **API Versioning** - Clean API structure with v1 prefix
+- ✅ **Hot Reload** - Fast development feedback
+- ✅ **Parallel Builds** - Turbo-powered performance
+- ✅ **Code Quality** - ESLint, Prettier, TypeScript strict
+- ✅ **Environment Management** - Centralized configuration
 
 ## 🚀 **Production Deployment**
 
-1. **Build all apps**:
+### **1. Build**
 
-   ```bash
-   pnpm build
-   ```
+```bash
+pnpm build
+```
 
-2. **Set production environment variables**
+### **2. Environment**
 
-3. **Run database migrations**:
+Set production environment variables in your deployment platform.
 
-   ```bash
-   pnpm db:migrate
-   ```
+### **3. Database**
 
-4. **Deploy using your preferred platform** (Vercel, Railway, etc.)
+```bash
+pnpm db:deploy  # Run production migrations
+```
 
-## 📚 **Next Steps**
+### **4. Deploy**
 
-To extend this boilerplate:
+Deploy to your preferred platform (Vercel, Railway, Docker, etc.)
 
-1. **Add Authentication** - JWT or session-based auth
-2. **Add Testing** - Jest + React Testing Library
-3. **Add CI/CD** - GitHub Actions workflows
-4. **Add Docker** - Containerization setup
-5. **Add More UI Components** - Extend the UI package
-6. **Add API Documentation** - Swagger/OpenAPI docs
+## 📚 **API Documentation**
+
+API documentation is available through:
+
+- **Swagger/OpenAPI** (coming soon)
+- **Postman Collection** (coming soon)
+- **Interactive API Explorer** (coming soon)
+
+> **Note**: API endpoints are not documented in README to maintain clean separation of concerns. Use proper API documentation tools instead.
+
+## 🔧 **Configuration**
+
+### **Adding New Packages**
+
+1. Create package in `packages/`
+2. Add to `pnpm-workspace.yaml`
+3. Update `tsconfig.base.json` paths
+4. Import using `@my/package-name`
+
+### **Environment Variables**
+
+All environment variables are managed in the root `.env` file. See `env.example` for all available options.
+
+### **Database Schema**
+
+Update schema in `packages/database/prisma/schema.prisma`, then run:
+
+```bash
+pnpm db:push      # Development
+pnpm db:migrate   # Production
+```
+
+## 🤝 **Contributing**
+
+1. **Setup**: `pnpm setup`
+2. **Develop**: `pnpm dev`
+3. **Lint**: `pnpm lint:fix`
+4. **Type Check**: `pnpm type-check`
+5. **Test**: `pnpm test` (when implemented)
+
+## 📄 **License**
+
+MIT License - see LICENSE file for details.
