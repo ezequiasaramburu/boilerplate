@@ -16,6 +16,7 @@
     "db:seed": "tsx src/seed.ts"
   },
   "dependencies": {
+    "@my/types": "workspace:*",
     "@prisma/client": "^5.7.0",
     "prisma": "^5.7.0"
   },

@@ -3,7 +3,7 @@ import { z } from 'zod'
 // Define the schema for environment variables
 const envSchema = z.object({
   // API Configuration
-  NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:8000'),
+  NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:3000'),
   
   // App Configuration
   NEXT_PUBLIC_APP_NAME: z.string().default('Enterprise App'),

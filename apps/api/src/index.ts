@@ -5,7 +5,6 @@ import cookieParser from 'cookie-parser'
 import { connectDb } from '@my/database'
 import {
   corsMiddleware,
-  securityMiddleware,
   securityHeaders,
   csrfSecurityHeaders,
   sanitizeInput,
@@ -14,7 +13,6 @@ import {
   globalRateLimit,
   authRateLimit,
   oauthRateLimit,
-  registrationRateLimit,
   jwtCSRFProtection,
   csrfTokenEndpoint,
   loggingMiddleware,
@@ -27,7 +25,7 @@ import { authRouter } from './routes/auth.js'
 import { socialAuthRouter } from './routes/social-auth.js'
 import { usersRouter } from './routes/users.js'
 import { billingRouter } from './routes/billing.js'
-import { webhookRouter } from './routes/webhooks.js'
+import webhookAdminRouter from './routes/webhook-admin.js'
 
 const app = express()
 const port = process.env.PORT || 4000
@@ -75,14 +73,6 @@ app.use(session({
 app.use(passport.initialize())
 app.use(passport.session())
 
-// Health check
-app.get('/health', (_, res) => {
-  res.json({ success: true, message: 'API is running!' })
-})
-
-// Webhooks must be before body parsing middleware
-app.use('/webhooks', express.raw({ type: 'application/json' }), webhookRouter)
-
 // API v1 routes with specific rate limiting
 const API_VERSION = '/api/v1'
 
@@ -94,6 +84,7 @@ app.use(`${API_VERSION}/auth`, authRateLimit, jwtCSRFProtection, authRouter)
 app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter) // OAuth skips CSRF
 app.use(`${API_VERSION}/users`, authenticateToken, usersRouter)
 app.use(`${API_VERSION}/billing`, authenticateToken, billingRouter)
+app.use(`${API_VERSION}/admin/webhooks`, webhookAdminRouter)
 
 // Versioned health check
 app.get(`${API_VERSION}/health`, (_, res) => {

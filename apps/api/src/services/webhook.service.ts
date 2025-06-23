@@ -1,11 +1,42 @@
 import Stripe from 'stripe'
 import { prisma } from '@my/database'
 import { stripeService } from './stripe.service.js'
+import { notificationService } from './notification.service.js'
 import { STRIPE_WEBHOOK_EVENTS, type StripeWebhookEventType } from '@my/types'
 
 class WebhookService {
-  // Verify and process Stripe webhook
+  private readonly MAX_RETRY_ATTEMPTS = 3
+  private readonly RETRY_DELAY = 1000 // 1 second
+
+  // Verify and process Stripe webhook with retry mechanism
   async processStripeWebhook(payload: string | Buffer, signature: string): Promise<void> {
+    let attempt = 0
+    let lastError: Error | null = null
+
+    while (attempt < this.MAX_RETRY_ATTEMPTS) {
+      try {
+        await this.processWebhookAttempt(payload, signature, attempt + 1)
+        return // Success - exit retry loop
+      } catch (error) {
+        lastError = error as Error
+        attempt++
+        
+        console.error(`Webhook processing attempt ${attempt} failed:`, error)
+        
+        if (attempt < this.MAX_RETRY_ATTEMPTS) {
+          // Wait before retrying
+          await this.sleep(this.RETRY_DELAY * attempt)
+        }
+      }
+    }
+
+    // All attempts failed
+    console.error(`Webhook processing failed after ${this.MAX_RETRY_ATTEMPTS} attempts`)
+    throw lastError
+  }
+
+  // Single webhook processing attempt
+  private async processWebhookAttempt(payload: string | Buffer, signature: string, attempt: number): Promise<void> {
     try {
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
       if (!webhookSecret) {
@@ -16,20 +47,25 @@ class WebhookService {
       const stripe = stripeService.getStripeInstance()
       const event = stripe.webhooks.constructEvent(payload, signature, webhookSecret)
 
+      console.log(`🔄 Processing webhook ${event.type} (${event.id}) - Attempt ${attempt}`)
+
       // Check if we've already processed this event
       const existingEvent = await prisma.webhookEvent.findUnique({
         where: { stripeEventId: event.id },
       })
 
       if (existingEvent?.processed) {
-        console.log(`Webhook event ${event.id} already processed`)
+        console.log(`✅ Webhook event ${event.id} already processed`)
         return
       }
 
       // Store webhook event
       await prisma.webhookEvent.upsert({
         where: { stripeEventId: event.id },
-        update: { processed: false },
+        update: { 
+          processed: false,
+          processingError: null // Clear previous errors on retry
+        },
         create: {
           stripeEventId: event.id,
           eventType: event.type,
@@ -47,11 +83,15 @@ class WebhookService {
         data: { processed: true },
       })
 
-      console.log(`Successfully processed webhook event: ${event.type}`)
-    } catch (error) {
-      console.error('Error processing Stripe webhook:', error)
+      console.log(`✅ Successfully processed webhook event: ${event.type} (${event.id})`)
       
-      // Store error in webhook event if we have the event ID
+      // Send success notification for critical events
+      await this.notifyWebhookSuccess(event)
+
+    } catch (error) {
+      console.error(`❌ Error processing Stripe webhook (attempt ${attempt}):`, error)
+      
+      // Store error in webhook event
       try {
         const stripe = stripeService.getStripeInstance()
         const event = stripe.webhooks.constructEvent(payload, signature, process.env.STRIPE_WEBHOOK_SECRET!)
@@ -69,6 +109,14 @@ class WebhookService {
             processingError: error instanceof Error ? error.message : 'Unknown error',
           },
         })
+
+        // Notify admin of webhook processing error
+        await notificationService.notifyWebhookError(
+          event.type,
+          event.id,
+          error instanceof Error ? error.message : 'Unknown error'
+        )
+
       } catch (innerError) {
         console.error('Error storing webhook error:', innerError)
       }
@@ -113,19 +161,18 @@ class WebhookService {
         break
 
       default:
-        console.log(`Unhandled webhook event type: ${event.type}`)
+        console.log(`⚠️  Unhandled webhook event type: ${event.type}`)
     }
   }
 
-  // Handle subscription creation
+  // Handle subscription creation with notifications
   private async handleSubscriptionCreated(subscription: Stripe.Subscription): Promise<void> {
     try {
       const customer = await this.getCustomerFromStripe(subscription.customer as string)
       const userId = customer.metadata?.userId
 
       if (!userId) {
-        console.warn('No userId found in customer metadata for subscription:', subscription.id)
-        return
+        throw new Error('No userId found in customer metadata for subscription: ' + subscription.id)
       }
 
       // Get subscription plan
@@ -143,7 +190,7 @@ class WebhookService {
       }
 
       // Create subscription in database
-      await prisma.subscription.create({
+      const newSubscription = await prisma.subscription.create({
         data: {
           userId,
           planId: plan.id,
@@ -161,86 +208,183 @@ class WebhookService {
           interval: this.mapStripeInterval(subscription.items.data[0]?.price.recurring?.interval || 'month'),
           intervalCount: subscription.items.data[0]?.price.recurring?.interval_count || 1,
         },
+        include: {
+          plan: true,
+          user: true,
+        },
       })
 
-      console.log(`Created subscription for user ${userId}:`, subscription.id)
+      console.log(`💰 Created subscription for user ${userId}: ${subscription.id}`)
+
+      // Send welcome notification
+      await notificationService.notifySubscriptionCreated(newSubscription)
+
+      // Notify team of new subscription
+      await notificationService.sendSlackNotification(
+        `🎉 New subscription! ${newSubscription.user.email} subscribed to ${plan.name}`,
+        'sales'
+      )
+
+      // Check revenue milestones
+      await this.checkRevenueMilestone()
+
     } catch (error) {
-      console.error('Error handling subscription created:', error)
+      console.error('❌ Error handling subscription created:', error)
       throw error
     }
   }
 
-  // Handle subscription updates
+  // Handle subscription updates with enhanced logging
   private async handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
     try {
-      await prisma.subscription.update({
+      const existingSubscription = await prisma.subscription.findUnique({
+        where: { stripeSubscriptionId: subscription.id },
+        include: { plan: true, user: true },
+      })
+
+      if (!existingSubscription) {
+        console.warn(`⚠️  Subscription not found for update: ${subscription.id}`)
+        return
+      }
+
+      const previousStatus = existingSubscription.status
+      const newStatus = this.mapStripeStatus(subscription.status)
+
+      const updatedSubscription = await prisma.subscription.update({
         where: { stripeSubscriptionId: subscription.id },
         data: {
-          status: this.mapStripeStatus(subscription.status),
+          status: newStatus,
           currentPeriodStart: new Date(subscription.current_period_start * 1000),
           currentPeriodEnd: new Date(subscription.current_period_end * 1000),
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
           canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null,
         },
+        include: {
+          plan: true,
+          user: true,
+        },
       })
 
-      console.log(`Updated subscription:`, subscription.id)
+      console.log(`🔄 Updated subscription ${subscription.id}: ${previousStatus} → ${newStatus}`)
+
+      // Handle status changes
+      if (previousStatus !== newStatus) {
+        await this.handleStatusChange(updatedSubscription, previousStatus, newStatus)
+      }
+
     } catch (error) {
-      console.error('Error handling subscription updated:', error)
+      console.error('❌ Error handling subscription updated:', error)
       throw error
     }
   }
 
-  // Handle subscription deletion
+  // Handle subscription deletion with notifications
   private async handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
     try {
-      await prisma.subscription.update({
+      const deletedSubscription = await prisma.subscription.update({
         where: { stripeSubscriptionId: subscription.id },
         data: {
           status: 'CANCELED',
           canceledAt: new Date(),
         },
+        include: {
+          plan: true,
+          user: true,
+        },
       })
 
-      console.log(`Deleted subscription:`, subscription.id)
+      console.log(`❌ Deleted subscription: ${subscription.id}`)
+
+      // Send cancellation notification
+      await notificationService.notifySubscriptionCanceled(deletedSubscription)
+
+      // Alert team about churn
+      await notificationService.sendSlackNotification(
+        `😞 Subscription canceled: ${deletedSubscription.user.email} (${deletedSubscription.plan.name})`,
+        'churn'
+      )
+
     } catch (error) {
-      console.error('Error handling subscription deleted:', error)
+      console.error('❌ Error handling subscription deleted:', error)
       throw error
     }
   }
 
-  // Handle successful invoice payment
+  // Handle successful payments with notifications
   private async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
     try {
-      if (invoice.subscription) {
-        // Update subscription status to active
-        await prisma.subscription.updateMany({
-          where: { stripeSubscriptionId: invoice.subscription as string },
-          data: { status: 'ACTIVE' },
-        })
+      if (!invoice.subscription) return
 
-        console.log(`Payment succeeded for subscription:`, invoice.subscription)
+      const subscription = await prisma.subscription.findUnique({
+        where: { stripeSubscriptionId: invoice.subscription as string },
+        include: { plan: true, user: true },
+      })
+
+      if (!subscription) {
+        console.warn(`⚠️  Subscription not found for invoice: ${invoice.id}`)
+        return
       }
+
+      console.log(`💳 Payment succeeded for subscription ${subscription.stripeSubscriptionId}: ${invoice.amount_paid / 100} ${invoice.currency}`)
+
+      // Send payment confirmation
+      await notificationService.notifyPaymentSucceeded(subscription, invoice.amount_paid)
+
+      // Update next billing date if needed
+      if (invoice.period_end) {
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            currentPeriodEnd: new Date(invoice.period_end * 1000),
+          },
+        })
+      }
+
     } catch (error) {
-      console.error('Error handling invoice payment succeeded:', error)
+      console.error('❌ Error handling invoice payment succeeded:', error)
       throw error
     }
   }
 
-  // Handle failed invoice payment
+  // Handle failed payments with urgent notifications
   private async handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
     try {
-      if (invoice.subscription) {
-        // Update subscription status to past due
-        await prisma.subscription.updateMany({
-          where: { stripeSubscriptionId: invoice.subscription as string },
-          data: { status: 'PAST_DUE' },
-        })
+      if (!invoice.subscription) return
 
-        console.log(`Payment failed for subscription:`, invoice.subscription)
+      const subscription = await prisma.subscription.findUnique({
+        where: { stripeSubscriptionId: invoice.subscription as string },
+        include: { plan: true, user: true },
+      })
+
+      if (!subscription) {
+        console.warn(`⚠️  Subscription not found for failed invoice: ${invoice.id}`)
+        return
       }
+
+      console.log(`⚠️  Payment failed for subscription ${subscription.stripeSubscriptionId}: ${invoice.amount_due / 100} ${invoice.currency}`)
+
+      // Send payment failure notification
+      await notificationService.notifyPaymentFailed(subscription, invoice.amount_due)
+
+      // Alert team about payment failure
+      await notificationService.sendSlackNotification(
+        `🚨 Payment failed: ${subscription.user.email} (${subscription.plan.name}) - $${invoice.amount_due / 100}`,
+        'billing-alerts'
+      )
+
+      // Admin notification for high-value failures
+      if (invoice.amount_due >= 5000) { // $50+
+        await notificationService.notifyAdmin('High-Value Payment Failure', {
+          userEmail: subscription.user.email,
+          planName: subscription.plan.name,
+          amount: invoice.amount_due / 100,
+          currency: invoice.currency,
+          subscriptionId: subscription.stripeSubscriptionId,
+        })
+      }
+
     } catch (error) {
-      console.error('Error handling invoice payment failed:', error)
+      console.error('❌ Error handling invoice payment failed:', error)
       throw error
     }
   }
@@ -320,6 +464,157 @@ class WebhookService {
 
   private mapStripeInterval(stripeInterval: string): string {
     return stripeInterval.toUpperCase()
+  }
+
+  // Handle status changes with appropriate notifications
+  private async handleStatusChange(subscription: any, previousStatus: string, newStatus: string): Promise<void> {
+    // Subscription became active after trial
+    if (previousStatus === 'TRIALING' && newStatus === 'ACTIVE') {
+      await notificationService.sendSlackNotification(
+        `🎯 Trial converted: ${subscription.user.email} (${subscription.plan.name})`,
+        'conversions'
+      )
+    }
+    
+    // Subscription went past due
+    if (newStatus === 'PAST_DUE') {
+      await notificationService.sendSlackNotification(
+        `⚠️  Subscription past due: ${subscription.user.email} (${subscription.plan.name})`,
+        'billing-alerts'
+      )
+    }
+
+    // Subscription became unpaid (about to cancel)
+    if (newStatus === 'UNPAID') {
+      await notificationService.sendSlackNotification(
+        `🚨 Subscription unpaid (will cancel): ${subscription.user.email} (${subscription.plan.name})`,
+        'billing-alerts'
+      )
+      
+      // Final attempt notification to user
+      await notificationService.notifyAdmin('Subscription About to Cancel', {
+        userEmail: subscription.user.email,
+        planName: subscription.plan.name,
+        subscriptionId: subscription.stripeSubscriptionId,
+      })
+    }
+  }
+
+  // Check and notify about revenue milestones
+  private async checkRevenueMilestone(): Promise<void> {
+    try {
+      const currentMonth = new Date()
+      currentMonth.setDate(1)
+      currentMonth.setHours(0, 0, 0, 0)
+
+      const nextMonth = new Date(currentMonth)
+      nextMonth.setMonth(nextMonth.getMonth() + 1)
+
+      // Calculate monthly recurring revenue (MRR)
+      const activeSubscriptions = await prisma.subscription.findMany({
+        where: {
+          status: { in: ['ACTIVE', 'TRIALING'] },
+          createdAt: {
+            gte: currentMonth,
+            lt: nextMonth,
+          },
+        },
+        include: { plan: true },
+      })
+
+      const monthlyRevenue = activeSubscriptions.reduce((total, sub) => {
+        // Convert to monthly amount
+        const monthlyAmount = sub.interval === 'YEAR' 
+          ? sub.amount / 12 
+          : sub.amount
+        return total + monthlyAmount
+      }, 0)
+
+      // Check milestones: $1k, $5k, $10k, $25k, $50k, $100k
+      const milestones = [100000, 500000, 1000000, 2500000, 5000000, 10000000] // in cents
+      
+      for (const milestone of milestones) {
+        if (monthlyRevenue >= milestone) {
+          await notificationService.notifyRevenueMilestone(monthlyRevenue, milestone)
+          break // Only notify the highest reached milestone
+        }
+      }
+
+    } catch (error) {
+      console.error('Error checking revenue milestone:', error)
+      // Don't throw - this is not critical
+    }
+  }
+
+  // Send success notifications for important events
+  private async notifyWebhookSuccess(event: Stripe.Event): Promise<void> {
+    const criticalEvents = [
+      'customer.subscription.created',
+      'customer.subscription.deleted',
+      'invoice.payment_failed',
+    ]
+
+    if (criticalEvents.includes(event.type)) {
+      console.log(`📢 Critical webhook processed: ${event.type}`)
+    }
+  }
+
+  // Utility: Sleep for retry delays
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  // Get detailed webhook processing statistics
+  async getWebhookStats(days: number = 7): Promise<{
+    totalEvents: number
+    processedEvents: number
+    failedEvents: number
+    eventTypes: Record<string, number>
+    errorRate: number
+  }> {
+    const since = new Date()
+    since.setDate(since.getDate() - days)
+
+    const events = await prisma.webhookEvent.findMany({
+      where: {
+        createdAt: { gte: since },
+      },
+    })
+
+    const totalEvents = events.length
+    const processedEvents = events.filter(e => e.processed).length
+    const failedEvents = events.filter(e => e.processingError).length
+
+    const eventTypes = events.reduce((acc, event) => {
+      acc[event.eventType] = (acc[event.eventType] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+
+    const errorRate = totalEvents > 0 ? (failedEvents / totalEvents) * 100 : 0
+
+    return {
+      totalEvents,
+      processedEvents,
+      failedEvents,
+      eventTypes,
+      errorRate: Math.round(errorRate * 100) / 100,
+    }
+  }
+
+  // Clean up old webhook events (run via cron job)
+  async cleanupOldWebhookEvents(olderThanDays: number = 30): Promise<number> {
+    const cutoffDate = new Date()
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays)
+
+    const result = await prisma.webhookEvent.deleteMany({
+      where: {
+        createdAt: { lt: cutoffDate },
+        processed: true,
+      },
+    })
+
+    console.log(`🧹 Cleaned up ${result.count} old webhook events (older than ${olderThanDays} days)`)
+    return result.count
   }
 }
 

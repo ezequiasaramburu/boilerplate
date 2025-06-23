@@ -24,4 +24,16 @@ export interface PaginatedResult<T> {
     total: number
     pages: number
   }
+}
+
+// Base user type - single source of truth
+export interface BaseUser {
+  id: string
+  email: string
+  name: string | null
+  avatar: string | null
+  role: string
+  emailVerified: boolean
+  createdAt: Date
+  updatedAt: Date
 } 

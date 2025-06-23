@@ -62,16 +62,16 @@ export interface AuthTokens {
   refreshToken: string
 }
 
-export interface AuthUser {
-  id: string
-  email: string
-  name: string | null
-  avatar: string | null
-  role: string
-  emailVerified: boolean
-  createdAt: Date
-  updatedAt: Date
-}
+import type { BaseUser } from '../common'
+
+// Auth-specific user (same as BaseUser for now, but can be extended)
+export type AuthUser = BaseUser
+
+// Public user info (for API responses - exclude sensitive fields)
+export type PublicUser = Omit<AuthUser, 'emailVerified'>
+
+// User profile (for settings page - include editable fields)
+export type UserProfile = Pick<AuthUser, 'id' | 'email' | 'name' | 'avatar'>
 
 export interface AuthResponse {
   user: AuthUser
