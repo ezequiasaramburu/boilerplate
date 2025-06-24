@@ -23,6 +23,7 @@ import { authenticateToken } from './middleware/auth.middleware.js';
 import passport from './config/passport.config.js';
 import { authRouter } from './routes/auth.js';
 import { billingRouter } from './routes/billing.js';
+import { invoiceRoutes, publicInvoiceRoutes } from './routes/invoices.js';
 import { socialAuthRouter } from './routes/social-auth.js';
 import { usageRouter } from './routes/usage.js';
 import { usersRouter } from './routes/users.js';
@@ -86,7 +87,11 @@ app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter); // OAuth
 app.use(`${API_VERSION}/users`, authenticateToken, usersRouter);
 app.use(`${API_VERSION}/billing`, authenticateToken, billingRouter);
 app.use(`${API_VERSION}/usage`, authenticateToken, usageRouter);
+app.use(`${API_VERSION}/invoices`, invoiceRoutes);
 app.use(`${API_VERSION}/admin/webhooks`, webhookAdminRouter);
+
+// Public invoice routes (no auth required)
+app.use(`${API_VERSION}/invoices`, publicInvoiceRoutes);
 
 // Versioned health check
 app.get(`${API_VERSION}/health`, (_, res) => {

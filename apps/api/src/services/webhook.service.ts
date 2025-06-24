@@ -442,6 +442,9 @@ class WebhookService {
 
       console.log(`💳 Payment succeeded for subscription ${subscription.stripeSubscriptionId}: ${invoice.amount_paid / 100} ${invoice.currency}`);
 
+      // Update or create local invoice record
+      await this.syncStripeInvoice(invoice, subscription);
+
       // Send payment confirmation
       await notificationService.notifyPaymentSucceeded(subscription, invoice.amount_paid);
 
@@ -502,6 +505,107 @@ class WebhookService {
       console.error('❌ Error handling invoice payment failed:', error);
       throw error;
     }
+  }
+
+  // Sync Stripe invoice with local database
+  private async syncStripeInvoice(
+    invoice: InvoiceWithSubscription,
+    subscription: any,
+  ): Promise<void> {
+    try {
+      const existingInvoice = await prisma.invoice.findUnique({
+        where: { stripeInvoiceId: invoice.id },
+      });
+
+      if (existingInvoice) {
+        await this.updateExistingInvoice(existingInvoice.id, invoice);
+      } else if (invoice.status === 'paid') {
+        await this.createNewInvoiceFromStripe(invoice, subscription);
+      }
+    } catch (error) {
+      console.error('❌ Error syncing Stripe invoice:', error);
+      // Don't throw error as this is not critical for webhook processing
+    }
+  }
+
+  // Update existing invoice with Stripe data
+  private async updateExistingInvoice(
+    invoiceId: string,
+    invoice: InvoiceWithSubscription,
+  ): Promise<void> {
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: invoice.status === 'paid' ? 'PAID' : 'PENDING',
+        paidAt: invoice.status_transitions?.paid_at
+          ? new Date(invoice.status_transitions.paid_at * 1000)
+          : null,
+        totalAmount: invoice.amount_paid || invoice.amount_due || 0,
+      },
+    });
+  }
+
+  // Create new invoice from Stripe invoice
+  private async createNewInvoiceFromStripe(
+    invoice: InvoiceWithSubscription,
+    subscription: any,
+  ): Promise<void> {
+    const { invoiceService } = await import('./invoice.service.js');
+    const { InvoiceType } = await import('@my/types');
+
+    const lineItems = this.createLineItemsFromStripe(invoice, subscription);
+
+    await invoiceService.createInvoice({
+      userId: subscription.userId,
+      subscriptionId: subscription.id,
+      type: InvoiceType.SUBSCRIPTION,
+      description: `Payment for ${subscription.plan.name}`,
+      billingPeriodStart: invoice.period_start
+        ? new Date(invoice.period_start * 1000)
+        : undefined,
+      billingPeriodEnd: invoice.period_end
+        ? new Date(invoice.period_end * 1000)
+        : undefined,
+      lineItems,
+    });
+
+    await this.updateInvoiceWithStripeDetails(invoice, subscription.userId);
+  }
+
+  // Create line items from Stripe invoice data
+  private createLineItemsFromStripe(invoice: InvoiceWithSubscription, subscription: any): any[] {
+    return invoice.lines?.data?.map(line => ({
+      description: line.description || `${subscription.plan.name} subscription`,
+      quantity: line.quantity || 1,
+      unitPrice: line.amount || subscription.amount,
+      productName: subscription.plan.name,
+      periodStart: line.period?.start ? new Date(line.period.start * 1000) : undefined,
+      periodEnd: line.period?.end ? new Date(line.period.end * 1000) : undefined,
+    })) || [{
+      description: `${subscription.plan.name} subscription`,
+      quantity: 1,
+      unitPrice: subscription.amount,
+      productName: subscription.plan.name,
+    }];
+  }
+
+  // Update created invoice with Stripe details
+  private async updateInvoiceWithStripeDetails(
+    invoice: InvoiceWithSubscription,
+    userId: string,
+  ): Promise<void> {
+    await prisma.invoice.updateMany({
+      where: {
+        userId,
+        stripeInvoiceId: null,
+      },
+      data: {
+        stripeInvoiceId: invoice.id,
+        stripeCustomerId: invoice.customer as string,
+        status: 'PAID',
+        paidAt: new Date(),
+      },
+    });
   }
 
   // Handle customer creation

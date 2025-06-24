@@ -38,7 +38,6 @@
     "db:seed": "turbo run seed --filter=@my/database",
     "db:reset": "turbo run reset --filter=@my/database",
     "db:deploy": "turbo run deploy --filter=@my/database",
-    "install": "pnpm install",
     "setup": "pnpm install && pnpm db:generate",
     "reset": "pnpm clean && pnpm install && pnpm db:generate",
     "test": "turbo run test",

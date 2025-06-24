@@ -42,6 +42,9 @@ model User {
   usageRecords  UsageRecord[]
   usageAlerts   UsageAlert[]
   
+  // Invoices
+  invoices      Invoice[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -154,6 +157,7 @@ model Subscription {
   usageRecords          UsageRecord[]
   usageQuotas           UsageQuota[]
   usageAlerts           UsageAlert[]
+  invoices              Invoice[]
   
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
@@ -293,4 +297,169 @@ enum UsageAlertType {
   CRITICAL       // 95% threshold
   EXCEEDED       // 100% threshold
   APPROACHING    // 90% threshold
+}
+
+// Invoice management models
+model Invoice {
+  id                    String            @id @default(cuid())
+  invoiceNumber         String            @unique // INV-2024-001
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId        String?           // Optional for one-time invoices
+  subscription          Subscription?     @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  
+  // Stripe integration
+  stripeInvoiceId       String?           @unique
+  stripeCustomerId      String?
+  stripePaymentIntentId String?
+  
+  // Invoice details
+  status                InvoiceStatus     @default(DRAFT)
+  type                  InvoiceType       @default(SUBSCRIPTION)
+  
+  // Amounts (in cents)
+  subtotal              Int               // Before tax and discounts
+  taxAmount             Int               @default(0)
+  discountAmount        Int               @default(0)
+  totalAmount           Int               // Final amount
+  currency              String            @default("usd")
+  
+  // Billing period
+  billingPeriodStart    DateTime?
+  billingPeriodEnd      DateTime?
+  
+  // Dates
+  issueDate             DateTime          @default(now())
+  dueDate               DateTime?
+  paidAt                DateTime?
+  voidedAt              DateTime?
+  
+  // Customer details (snapshot at time of invoice)
+  customerName          String?
+  customerEmail         String
+  customerAddress       Json?             // Billing address
+  
+  // Company details
+  companyName           String?
+  companyAddress        Json?
+  companyTaxId          String?
+  
+  // Invoice content
+  description           String?
+  notes                 String?           // Internal notes
+  customerNotes         String?           // Notes visible to customer
+  metadata              Json?             // Additional data
+  
+  // PDF generation
+  pdfUrl                String?           // URL to generated PDF
+  pdfGeneratedAt        DateTime?
+  
+  // Relations
+  lineItems             InvoiceLineItem[]
+  payments              InvoicePayment[]
+  
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([userId, status])
+  @@index([subscriptionId, billingPeriodStart, billingPeriodEnd])
+  @@index([stripeInvoiceId])
+  @@index([invoiceNumber])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id              String    @id @default(cuid())
+  invoiceId       String
+  invoice         Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  
+  // Line item details
+  description     String
+  quantity        Int       @default(1)
+  unitPrice       Int       // Price per unit in cents
+  totalPrice      Int       // quantity * unitPrice
+  
+  // Usage tracking reference
+  usageRecordId   String?   // Reference to usage record if applicable
+  metricType      UsageMetricType?
+  
+  // Product/service details
+  productName     String?
+  productId       String?   // Stripe product ID if applicable
+  priceId         String?   // Stripe price ID if applicable
+  
+  // Dates
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  
+  // Metadata
+  metadata        Json?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([invoiceId])
+  @@index([usageRecordId])
+  @@map("invoice_line_items")
+}
+
+model InvoicePayment {
+  id                String          @id @default(cuid())
+  invoiceId         String
+  invoice           Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  
+  // Payment details
+  amount            Int             // Amount in cents
+  currency          String          @default("usd")
+  status            PaymentStatus   @default(PENDING)
+  
+  // Stripe integration
+  stripePaymentId   String?         @unique
+  paymentMethod     String?         // card, bank_transfer, etc.
+  
+  // Payment details
+  paidAt            DateTime?
+  failedAt          DateTime?
+  refundedAt        DateTime?
+  refundAmount      Int?            // Refunded amount in cents
+  
+  // Failure details
+  failureReason     String?
+  failureCode       String?
+  
+  // Metadata
+  metadata          Json?
+  
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([invoiceId, status])
+  @@index([stripePaymentId])
+  @@map("invoice_payments")
+}
+
+enum InvoiceStatus {
+  DRAFT           // Being prepared
+  PENDING         // Sent to customer, awaiting payment
+  PAID            // Payment received
+  PARTIALLY_PAID  // Partial payment received
+  OVERDUE         // Past due date
+  VOIDED          // Cancelled/voided
+  REFUNDED        // Fully refunded
+}
+
+enum InvoiceType {
+  SUBSCRIPTION    // Regular subscription invoice
+  USAGE           // Usage-based billing invoice
+  ONE_TIME        // One-time payment invoice
+  CREDIT          // Credit note/refund
+}
+
+enum PaymentStatus {
+  PENDING         // Payment initiated
+  PROCESSING      // Payment being processed
+  SUCCEEDED       // Payment completed successfully
+  FAILED          // Payment failed
+  CANCELED        // Payment canceled
+  REFUNDED        // Payment refunded
 } 
