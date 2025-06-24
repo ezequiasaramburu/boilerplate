@@ -23,7 +23,7 @@ export interface BasePlan {
   features: any
 }
 
-import type { BaseUser } from '../common'
+import type { BaseUser } from '../common';
 
 // Utility type combining the base types
 export type SubscriptionWithPlan = BaseSubscription & {
@@ -59,4 +59,4 @@ export interface SlackNotificationPayload {
       short?: boolean
     }>
   }>
-} 
+}

@@ -149,7 +149,7 @@ export class UsageService {
       const metrics = await this.generateMetricSummaries(subscription.id, metricGroups);
 
       // Generate timeline if requested
-      const timeline = request.groupBy 
+      const timeline = request.groupBy
         ? this.generateTimeline(records, request.groupBy)
         : undefined;
 

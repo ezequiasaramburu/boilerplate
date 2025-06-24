@@ -1,1 +1,1 @@
-export * from './billing.types.js' 
+export * from './billing.types.js';

@@ -222,8 +222,8 @@ class StripeService {
           usageAlerts: {
             where: { acknowledged: false },
             orderBy: { createdAt: 'desc' },
-            take: 10
-          }
+            take: 10,
+          },
         },
         orderBy: {
           createdAt: 'desc',
