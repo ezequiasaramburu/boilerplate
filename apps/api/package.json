@@ -12,6 +12,8 @@
   "dependencies": {
     "@my/database": "workspace:*",
     "@my/types": "workspace:*",
+    "@react-email/render": "^0.0.14",
+    "@sendgrid/mail": "^8.1.0",
     "bcryptjs": "^3.0.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -28,6 +30,9 @@
     "passport-github2": "^0.1.12",
     "passport-google-oauth20": "^2.0.0",
     "pdfkit": "^0.17.1",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "resend": "^4.0.0",
     "stripe": "^18.2.1",
     "zod": "^3.22.0"
   },
@@ -35,6 +40,8 @@
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.17",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "18.2.19",
     "@types/express": "^4.17.17",
     "@types/express-session": "^1.18.2",
     "@types/jsonwebtoken": "^9.0.10",

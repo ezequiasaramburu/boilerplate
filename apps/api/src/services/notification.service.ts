@@ -1,23 +1,18 @@
 import { prisma } from '@my/database';
 import type { EmailData, SubscriptionWithPlan } from '@my/types';
+import { createEmailClient } from '../utils/email/email.factory.js';
+import { renderEmailTemplate } from '../utils/email/templates.js';
 
 class NotificationService {
-  // Send email notification (placeholder - integrate with your email service)
+  // Send email via selected provider
   async sendEmail(emailData: EmailData): Promise<void> {
     try {
-      // TODO: Integrate with your email service (Resend, SendGrid, etc.)
-      console.log('📧 Email notification:', {
-        to: emailData.to,
-        subject: emailData.subject,
-        template: emailData.template,
-        timestamp: new Date().toISOString(),
-      });
-
-      // In production, replace with actual email service:
-      // await emailService.send(emailData)
+      const client = createEmailClient();
+      const { html, text } = await renderEmailTemplate(emailData.template, emailData.data);
+      await client.send({ to: emailData.to, subject: emailData.subject, html, text });
     } catch (error) {
       console.error('Failed to send email notification:', error);
-      // Don't throw - email failures shouldn't stop webhook processing
+      // Don't throw - email failures shouldn't stop processing
     }
   }
 
