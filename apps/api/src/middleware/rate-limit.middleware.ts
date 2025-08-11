@@ -1,5 +1,6 @@
 import rateLimit from 'express-rate-limit';
 import type { Request, Response } from 'express';
+import { API_VERSION } from '../config/constants.js';
 
 // Rate limit error response
 const rateLimitHandler = (req: Request, res: Response) => {
@@ -20,7 +21,7 @@ export const globalRateLimit = rateLimit({
   legacyHeaders: false,
   skip: req => {
     // Skip rate limiting for health checks
-    return req.path === '/health' || req.path === '/api/v1/health';
+    return req.path === '/health' || req.path === `${API_VERSION}/health`;
   },
 });
 

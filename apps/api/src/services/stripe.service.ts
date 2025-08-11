@@ -8,6 +8,8 @@ import type {
   CreatePortalSessionResponse,
   SubscriptionStatus,
   SubscriptionUsage,
+  UsageAlert,
+  UsageQuota,
 } from '@my/types';
 
 class StripeService {
@@ -45,7 +47,7 @@ class StripeService {
 
     try {
       this.stripe = new Stripe(stripeSecretKey, {
-        apiVersion: '2025-05-28.basil', // Latest API version
+        // Omit apiVersion to use the account's default and avoid type mismatches
         typescript: true,
       });
     } catch (error) {
@@ -248,10 +250,14 @@ class StripeService {
           amount: subscription.amount,
           currency: subscription.currency,
           interval: subscription.interval as BillingInterval,
+          intervalCount: subscription.intervalCount,
           nextBillingDate: subscription.currentPeriodEnd,
         },
-        alerts: subscription.usageAlerts,
-        quotas: subscription.usageQuotas,
+        alerts: subscription.usageAlerts as unknown as UsageAlert[],
+        quotas: (subscription.usageQuotas || []).map(q => ({
+          ...q,
+          resetDate: q.resetDate ?? undefined,
+        })) as unknown as UsageQuota[],
       };
     } catch (error) {
       console.error('Error getting subscription usage:', error);

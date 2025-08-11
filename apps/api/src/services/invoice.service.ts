@@ -44,8 +44,7 @@ class InvoiceService {
       // Generate invoice number
       const invoiceNumber = `INV-${Date.now()}`;
 
-      // Create invoice (using any to bypass TS issues until client regenerates)
-      const invoice = await (prisma as any).invoice.create({
+      const invoice = await prisma.invoice.create({
         data: {
           invoiceNumber,
           userId: request.userId,
@@ -109,7 +108,7 @@ class InvoiceService {
   ): Promise<InvoiceWithDetails> {
     try {
       // Get subscription details
-      const subscription = await (prisma as any).subscription.findUnique({
+      const subscription = await prisma.subscription.findUnique({
         where: { id: subscriptionId },
         include: {
           user: { select: { id: true, email: true, name: true, stripeCustomerId: true } },
@@ -122,7 +121,7 @@ class InvoiceService {
       }
 
       // Get usage records for the billing period
-      const usageRecords = await (prisma as any).usageRecord.findMany({
+      const usageRecords = await prisma.usageRecord.findMany({
         where: {
           subscriptionId,
           billingPeriodStart: { gte: billingPeriodStart },
@@ -164,7 +163,7 @@ class InvoiceService {
       const invoice = await this.createInvoice(invoiceRequest);
 
       // Mark usage records as invoiced
-      await (prisma as any).usageRecord.updateMany({
+      await prisma.usageRecord.updateMany({
         where: {
           id: { in: usageRecords.map((r: any) => r.id) },
         },
@@ -186,7 +185,7 @@ class InvoiceService {
         whereClause.userId = userId;
       }
 
-      const invoice = await (prisma as any).invoice.findUnique({
+      const invoice = await prisma.invoice.findUnique({
         where: whereClause,
         include: {
           user: {
@@ -213,7 +212,7 @@ class InvoiceService {
     email: string,
   ): Promise<InvoiceWithDetails | null> {
     try {
-      const invoice = await (prisma as any).invoice.findFirst({
+      const invoice = await prisma.invoice.findFirst({
         where: {
           invoiceNumber,
           customerEmail: email,
@@ -263,10 +262,10 @@ class InvoiceService {
       });
 
       // Get total count
-      const total = await (prisma as any).invoice.count({ where: whereClause });
+      const total = await prisma.invoice.count({ where: whereClause });
 
       // Get invoices
-      const invoices = await (prisma as any).invoice.findMany({
+      const invoices = await prisma.invoice.findMany({
         where: whereClause,
         include: {
           user: {
@@ -331,7 +330,7 @@ class InvoiceService {
   }
 
   private async calculateInvoiceSummary(whereClause: any) {
-    const allInvoices = await (prisma as any).invoice.findMany({
+    const allInvoices = await prisma.invoice.findMany({
       where: whereClause,
       select: { totalAmount: true, status: true },
     });
@@ -372,7 +371,7 @@ class InvoiceService {
     updates: UpdateInvoiceRequest,
   ): Promise<InvoiceWithDetails> {
     try {
-      const invoice = await (prisma as any).invoice.update({
+      const invoice = await prisma.invoice.update({
         where: { id: invoiceId },
         data: updates,
         include: {
@@ -510,7 +509,7 @@ class InvoiceService {
   }
 
   private async updateInvoiceWithPdfInfo(invoiceId: string, filename: string): Promise<void> {
-    await (prisma as any).invoice.update({
+    await prisma.invoice.update({
       where: { id: invoiceId },
       data: {
         pdfUrl: `/temp/${filename}`,
@@ -525,7 +524,7 @@ class InvoiceService {
       const whereClause: any = {};
       if (userId) whereClause.userId = userId;
 
-      const invoices = await (prisma as any).invoice.findMany({
+      const invoices = await prisma.invoice.findMany({
         where: whereClause,
         select: { totalAmount: true, status: true, type: true },
       });
@@ -569,7 +568,7 @@ class InvoiceService {
   async markOverdueInvoices(): Promise<number> {
     try {
       const overdueDate = new Date();
-      const result = await (prisma as any).invoice.updateMany({
+      const result = await prisma.invoice.updateMany({
         where: {
           dueDate: { lt: overdueDate },
           status: { in: ['PENDING', 'PARTIALLY_PAID'] },

@@ -2,48 +2,49 @@ import helmet from 'helmet';
 import type { NextFunction, Request, Response } from 'express';
 
 // Enhanced security headers using Helmet
-export const securityHeaders = helmet({
-  // Content Security Policy with CSRF considerations
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", 'data:', 'https:'],
-      fontSrc: ["'self'"],
-      connectSrc: ["'self'"],
-      frameSrc: ["'none'"],
-      objectSrc: ["'none'"],
-      baseUri: ["'none'"],
-      formAction: ["'self'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+export const securityHeaders = (() => {
+  const directives: Record<string, any> = {
+    defaultSrc: ["'self'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    scriptSrc: ["'self'"],
+    imgSrc: ["'self'", 'data:', 'https:'],
+    fontSrc: ["'self'"],
+    connectSrc: ["'self'"],
+    frameSrc: ["'none'"],
+    objectSrc: ["'none'"],
+    baseUri: ["'none'"],
+    formAction: ["'self'"],
+  };
+
+  // Only add upgradeInsecureRequests in production
+  if (process.env.NODE_ENV === 'production') {
+    (directives as any).upgradeInsecureRequests = [];
+  }
+
+  return helmet({
+    contentSecurityPolicy: { directives },
+    // Prevent clickjacking
+    frameguard: { action: 'deny' },
+    // Strict transport security (HTTPS only in production)
+    hsts: {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true,
     },
-  },
-  // Prevent clickjacking
-  frameguard: { action: 'deny' },
-  // Remove X-Powered-By header
-  hidePoweredBy: true,
-  // Strict transport security (HTTPS only in production)
-  hsts: {
-    maxAge: 31536000, // 1 year
-    includeSubDomains: true,
-    preload: true,
-  },
-  // Prevent MIME type sniffing
-  noSniff: true,
-  // Referrer policy - stricter for CSRF protection
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  // XSS protection
-  xssFilter: true,
-  // Cross Origin Embedder Policy
-  crossOriginEmbedderPolicy: false, // Set to true if you need stronger isolation
-  // Cross Origin Opener Policy
-  crossOriginOpenerPolicy: { policy: 'same-origin' },
-  // Cross Origin Resource Policy
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-  // Origin Agent Cluster
-  originAgentCluster: true,
-});
+    // Prevent MIME type sniffing
+    noSniff: true,
+    // Referrer policy - stricter for CSRF protection
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    // Cross Origin Embedder Policy
+    crossOriginEmbedderPolicy: false, // Set to true if you need stronger isolation
+    // Cross Origin Opener Policy
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    // Cross Origin Resource Policy
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    // Origin Agent Cluster
+    originAgentCluster: true,
+  });
+})();
 
 // Additional CSRF-specific security headers
 export const csrfSecurityHeaders = (req: Request, res: Response, next: NextFunction) => {

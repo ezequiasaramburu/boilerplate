@@ -187,14 +187,18 @@ export class AuthService {
     };
 
     // Generate access token
-    const accessToken = (jwt.sign as any)(payload, this.JWT_SECRET, {
-      expiresIn: this.JWT_EXPIRES_IN,
-    });
+    const accessToken = jwt.sign(
+      payload as object,
+      this.JWT_SECRET as jwt.Secret,
+      { expiresIn: this.JWT_EXPIRES_IN } as jwt.SignOptions,
+    );
 
     // Generate refresh token
-    const refreshToken = (jwt.sign as any)(payload, this.JWT_REFRESH_SECRET, {
-      expiresIn: this.JWT_REFRESH_EXPIRES_IN,
-    });
+    const refreshToken = jwt.sign(
+      payload as object,
+      this.JWT_REFRESH_SECRET as jwt.Secret,
+      { expiresIn: this.JWT_REFRESH_EXPIRES_IN } as jwt.SignOptions,
+    );
 
     // Store refresh token in database
     const expiresAt = new Date();

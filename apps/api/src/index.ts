@@ -28,6 +28,8 @@ import { socialAuthRouter } from './routes/social-auth.js';
 import { usageRouter } from './routes/usage.js';
 import { usersRouter } from './routes/users.js';
 import webhookAdminRouter from './routes/webhook-admin.js';
+import { webhookRouter } from './routes/webhooks.js';
+import { API_VERSION } from './config/constants.js';
 
 const app = express();
 const port = process.env.PORT;
@@ -46,6 +48,9 @@ app.use(requestSizeLimit); // Request size limits
 
 // Rate limiting
 app.use(globalRateLimit); // Apply global rate limit to all routes
+
+// Mount Stripe webhooks BEFORE JSON parsing to preserve raw body for signature verification
+app.use(`${API_VERSION}/webhooks`, webhookRouter);
 
 // Request parsing
 app.use(express.json({ limit: '10mb' }));
@@ -76,7 +81,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // API v1 routes with specific rate limiting
-const API_VERSION = '/api/v1';
 
 // CSRF token endpoint (public)
 app.get(`${API_VERSION}/csrf-token`, csrfTokenEndpoint);
@@ -93,15 +97,18 @@ app.use(`${API_VERSION}/admin/webhooks`, webhookAdminRouter);
 // Public invoice routes (no auth required)
 app.use(`${API_VERSION}/invoices`, publicInvoiceRoutes);
 
-// Versioned health check
-app.get(`${API_VERSION}/health`, (_, res) => {
+// Health check (shared handler)
+const healthHandler = (_: express.Request, res: express.Response) => {
   res.json({
     success: true,
-    message: 'API v1 is running!',
+    message: 'API is running!',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
   });
-});
+};
+
+app.get(`${API_VERSION}/health`, healthHandler);
+app.get('/health', healthHandler);
 
 // Error handling
 app.use(notFoundHandler);

@@ -1,5 +1,6 @@
 import Tokens from 'csrf';
 import type { NextFunction, Request, Response } from 'express';
+import { API_VERSION } from '../config/constants.js';
 
 // Initialize CSRF token generator
 const tokens = new Tokens();
@@ -22,11 +23,11 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction) 
   // Skip CSRF for certain routes (health checks, public endpoints)
   const skipRoutes = [
     '/health',
-    '/api/v1/health',
-    '/api/v1/auth/oauth/google',
-    '/api/v1/auth/oauth/github',
-    '/api/v1/auth/oauth/google/callback',
-    '/api/v1/auth/oauth/github/callback',
+    `${API_VERSION}/health`,
+    `${API_VERSION}/auth/oauth/google`,
+    `${API_VERSION}/auth/oauth/github`,
+    `${API_VERSION}/auth/oauth/google/callback`,
+    `${API_VERSION}/auth/oauth/github/callback`,
   ];
 
   if (skipRoutes.includes(req.path)) {

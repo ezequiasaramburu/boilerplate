@@ -304,7 +304,10 @@ export class InvoiceController {
       }
 
       // Find invoice by number and customer email
-      const invoice = await invoiceService.getInvoiceById(invoiceNumber);
+      const invoice = await invoiceService.getInvoiceByNumber(
+        invoiceNumber,
+        String(email),
+      );
 
       if (!invoice || invoice.customerEmail !== email) {
         const response: ApiResponse = {
