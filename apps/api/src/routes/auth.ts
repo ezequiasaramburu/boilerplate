@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { changePasswordSchema, loginSchema, refreshTokenSchema, registerSchema } from '@my/types';
+import { changePasswordSchema, loginSchema, refreshTokenSchema, registerSchema, verifyEmailTokenSchema } from '@my/types';
 import { registrationRateLimit, sensitiveRateLimit, validateRequest } from '../middleware/index.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 import { authController } from '../controllers/auth.controller.js';
@@ -44,6 +44,26 @@ router.post('/change-password',
   sensitiveRateLimit, // Very strict limit on password changes
   validateRequest({ body: changePasswordSchema }),
   authController.changePassword.bind(authController),
+);
+
+// Password reset
+router.post('/password/forgot',
+  registrationRateLimit,
+  authController.requestPasswordReset.bind(authController),
+);
+router.post('/password/reset',
+  sensitiveRateLimit,
+  authController.resetPassword.bind(authController),
+);
+
+// Email verification
+router.post('/email/send-verification',
+  authenticateToken,
+  authController.sendEmailVerification.bind(authController),
+);
+router.get('/email/verify',
+  validateRequest({ query: verifyEmailTokenSchema }),
+  authController.verifyEmail.bind(authController),
 );
 
 export { router as authRouter };

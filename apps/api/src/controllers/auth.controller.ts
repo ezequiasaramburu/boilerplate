@@ -112,6 +112,47 @@ export class AuthController {
     }
   }
 
+  async requestPasswordReset(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email } = req.body as { email: string };
+      await authService.requestPasswordReset(email);
+      res.json({ success: true, message: 'If that email exists, a reset link was sent' } satisfies ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { token, password } = req.body as { token: string; password: string };
+      await authService.resetPassword(token, password);
+      res.json({ success: true, message: 'Password reset successfully' } satisfies ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async sendEmailVerification(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      // @ts-ignore
+      const userId = req.user.id;
+      await authService.sendEmailVerification(userId);
+      res.json({ success: true, message: 'Verification email sent' } satisfies ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { token } = req.query as { token: string };
+      await authService.verifyEmail(token);
+      res.json({ success: true, message: 'Email verified successfully' } satisfies ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       // @ts-ignore - user will be added by auth middleware

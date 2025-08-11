@@ -31,6 +31,11 @@ export const resetPasswordSchema = z.object({
     .regex(/[0-9]/, 'Password must contain at least one number'),
 });
 
+// Email verification schemas
+export const verifyEmailTokenSchema = z.object({
+  token: z.string().min(1, 'Verification token is required'),
+});
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
   newPassword: z.string().min(8, 'Password must be at least 8 characters')
@@ -45,6 +50,7 @@ export type LoginInput = z.infer<typeof loginSchema>
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
+export type VerifyEmailTokenInput = z.infer<typeof verifyEmailTokenSchema>
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
 
 // JWT payload type

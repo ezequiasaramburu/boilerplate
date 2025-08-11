@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import { prisma } from '@my/database';
 import type {
   AuthResponse,
@@ -159,6 +160,82 @@ export class AuthService {
 
     // Logout from all devices (invalidate all refresh tokens)
     await this.logoutAll(userId);
+  }
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return; // Don't leak existence
+
+    const token = crypto.randomUUID();
+    const expires = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: token,
+        passwordResetExpires: expires,
+      },
+    });
+
+    // Send email
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+    await (await import('./notification.service.js')).notificationService.sendEmail({
+      to: user.email,
+      subject: 'Reset your password',
+      template: 'password-reset',
+      data: { name: user.name || 'there', resetUrl, expires },
+    });
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const user = await prisma.user.findFirst({
+      where: {
+        passwordResetToken: token,
+        passwordResetExpires: { gt: new Date() },
+      },
+    });
+    if (!user) throw new Error('Invalid or expired reset token');
+
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashed,
+        passwordResetToken: null,
+        passwordResetExpires: null,
+      },
+    });
+  }
+
+  async sendEmailVerification(userId: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
+    const token = crypto.randomUUID();
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerificationToken: token },
+    });
+
+    const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+    await (await import('./notification.service.js')).notificationService.sendEmail({
+      to: user.email,
+      subject: 'Verify your email',
+      template: 'verify-email',
+      data: { name: user.name || 'there', verifyUrl },
+    });
+  }
+
+  async verifyEmail(token: string): Promise<void> {
+    const user = await prisma.user.findFirst({
+      where: { emailVerificationToken: token },
+    });
+    if (!user) throw new Error('Invalid verification token');
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true, emailVerificationToken: null },
+    });
   }
 
   async verifyAccessToken(token: string): Promise<AuthUser> {
