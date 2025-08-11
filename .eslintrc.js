@@ -55,7 +55,7 @@ module.exports = {
       asyncArrow: 'always',
     }],
     'arrow-spacing': ['error', { before: true, after: true }],
-    'arrow-parens': ['error', 'as-needed'],
+    'arrow-parens': ['error', 'avoid'],
 
     // ============================================================================
     // CODE QUALITY & COMPLEXITY
@@ -67,7 +67,7 @@ module.exports = {
     'max-nested-callbacks': ['warn', 3],
     'max-params': ['warn', 4],
     'max-statements': ['warn', 20],
-    'max-lines-per-function': ['warn', { max: 50, skipBlankLines: true, skipComments: true }],
+    'max-lines-per-function': ['warn', { max: 60, skipBlankLines: true, skipComments: true }],
 
     // Code quality
     'no-duplicate-imports': 'error',
