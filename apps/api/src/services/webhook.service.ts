@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { prisma } from '@my/database';
 import { stripeService } from './stripe.service.js';
 import { notificationService } from './notification.service.js';
-import { BillingInterval, STRIPE_WEBHOOK_EVENTS, type StripeWebhookEventType, SubscriptionStatus } from '@my/types';
+import { BillingInterval, NotificationPriority, NotificationType, STRIPE_WEBHOOK_EVENTS, type StripeWebhookEventType, SubscriptionStatus } from '@my/types';
 
 // Extend Stripe Invoice interface to include subscription property
 interface InvoiceWithSubscription extends Stripe.Invoice {
@@ -137,12 +137,7 @@ class WebhookService {
         },
       });
 
-      // Notify admin of webhook processing error
-      await notificationService.notifyWebhookError(
-        event.type,
-        event.id,
-        error instanceof Error ? error.message : 'Unknown error',
-      );
+      // TODO: Add webhook error notification integration
 
     } catch (innerError) {
       console.error('Error storing webhook error:', innerError);
@@ -275,11 +270,21 @@ class WebhookService {
 
   // Send subscription-related notifications
   private async sendSubscriptionNotifications(newSubscription: any, plan: any): Promise<void> {
-    await notificationService.notifySubscriptionCreated(newSubscription);
-    await notificationService.sendSlackNotification(
-      `🎉 New subscription! ${newSubscription.user.email} subscribed to ${plan.name}`,
-      'sales',
-    );
+    try {
+      // Create in-app notification for user
+      await notificationService.createFromTemplate(
+        'SUBSCRIPTION_CREATED',
+        newSubscription.userId,
+        {
+          planName: plan.name,
+          appName: process.env.APP_NAME || 'SaaS App',
+        },
+      );
+
+      // TODO: Add Slack notification integration here if needed
+    } catch (error) {
+      console.error('Error sending subscription notifications:', error);
+    }
   }
 
   // Initialize usage quotas for a new subscription
@@ -410,14 +415,7 @@ class WebhookService {
 
       console.log(`❌ Deleted subscription: ${subscription.id}`);
 
-      // Send cancellation notification
-      await notificationService.notifySubscriptionCanceled(deletedSubscription);
-
-      // Alert team about churn
-      await notificationService.sendSlackNotification(
-        `😞 Subscription canceled: ${deletedSubscription.user.email} (${deletedSubscription.plan.name})`,
-        'churn',
-      );
+      // TODO: Add subscription cancellation notification
 
     } catch (error) {
       console.error('❌ Error handling subscription deleted:', error);
@@ -446,7 +444,13 @@ class WebhookService {
       await this.syncStripeInvoice(invoice, subscription);
 
       // Send payment confirmation
-      await notificationService.notifyPaymentSucceeded(subscription, invoice.amount_paid);
+      await notificationService.createFromTemplate(
+        'PAYMENT_SUCCESS',
+        subscription.userId,
+        {
+          amount: `$${(invoice.amount_paid / 100).toFixed(2)}`,
+        },
+      );
 
       // Update next billing date if needed
       if (invoice.period_end) {
@@ -482,22 +486,23 @@ class WebhookService {
       console.log(`⚠️  Payment failed for subscription ${subscription.stripeSubscriptionId}: ${invoice.amount_due / 100} ${invoice.currency}`);
 
       // Send payment failure notification
-      await notificationService.notifyPaymentFailed(subscription, invoice.amount_due);
-
-      // Alert team about payment failure
-      await notificationService.sendSlackNotification(
-        `🚨 Payment failed: ${subscription.user.email} (${subscription.plan.name}) - $${invoice.amount_due / 100}`,
-        'billing-alerts',
+      await notificationService.createFromTemplate(
+        'PAYMENT_FAILED',
+        subscription.userId,
       );
+
+      // TODO: Add Slack notification integration for payment failures
 
       // Admin notification for high-value failures
       if (invoice.amount_due >= 5000) { // $50+
-        await notificationService.notifyAdmin('High-Value Payment Failure', {
-          userEmail: subscription.user.email,
-          planName: subscription.plan.name,
-          amount: invoice.amount_due / 100,
-          currency: invoice.currency,
-          subscriptionId: subscription.stripeSubscriptionId,
+        await notificationService.createNotification({
+          userId: subscription.userId,
+          type: NotificationType.ERROR,
+          priority: NotificationPriority.URGENT,
+          category: 'billing',
+          title: 'High-Value Payment Failure',
+          message: `Payment failed for $${(invoice.amount_due / 100).toFixed(2)}. Please update your payment method immediately.`,
+          actionUrl: '/dashboard/billing',
         });
       }
 
@@ -694,33 +699,17 @@ class WebhookService {
   ): Promise<void> {
     // Subscription became active after trial
     if (previousStatus === 'TRIALING' && newStatus === 'ACTIVE') {
-      await notificationService.sendSlackNotification(
-        `🎯 Trial converted: ${subscription.user.email} (${subscription.plan.name})`,
-        'conversions',
-      );
+      // TODO: Add Slack integration for trial conversions
     }
 
     // Subscription went past due
     if (newStatus === 'PAST_DUE') {
-      await notificationService.sendSlackNotification(
-        `⚠️  Subscription past due: ${subscription.user.email} (${subscription.plan.name})`,
-        'billing-alerts',
-      );
+      // TODO: Add Slack integration for past due alerts
     }
 
     // Subscription became unpaid (about to cancel)
     if (newStatus === 'UNPAID') {
-      await notificationService.sendSlackNotification(
-        `🚨 Subscription unpaid (will cancel): ${subscription.user.email} (${subscription.plan.name})`,
-        'billing-alerts',
-      );
-
-      // Final attempt notification to user
-      await notificationService.notifyAdmin('Subscription About to Cancel', {
-        userEmail: subscription.user.email,
-        planName: subscription.plan.name,
-        subscriptionId: subscription.stripeSubscriptionId,
-      });
+      // TODO: Add Slack integration for unpaid subscription alerts
     }
   }
 
@@ -759,7 +748,7 @@ class WebhookService {
 
       for (const milestone of milestones) {
         if (monthlyRevenue >= milestone) {
-          await notificationService.notifyRevenueMilestone(monthlyRevenue, milestone);
+          // TODO: Add revenue milestone notification
           break; // Only notify the highest reached milestone
         }
       }

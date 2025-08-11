@@ -56,7 +56,10 @@ export class UsageService {
       // Check if we need to send alerts
       await this.checkAndSendAlerts(subscription.id, userId, request.metricType);
 
-      return usageRecord;
+      return {
+        ...usageRecord,
+        unitPrice: usageRecord.unitPrice ? Number(usageRecord.unitPrice) : undefined,
+      } as UsageRecord;
     } catch (error) {
       console.error('Error recording usage:', error);
       throw new Error('Failed to record usage');
@@ -85,15 +88,18 @@ export class UsageService {
           : 0;
 
         // Calculate trend
-        const trend = await this.calculateUsageTrend(subscription.id, quota.metricType);
+        const trend = await this.calculateUsageTrend(
+          subscription.id,
+          quota.metricType as UsageMetricType,
+        );
 
         stats[quota.metricType] = {
           current: quota.currentAmount,
           limit: quota.limitAmount,
           percentage: Math.round(percentage * 100) / 100,
           exceeded: quota.exceeded,
-          resetDate: quota.resetDate,
-          trend,
+          resetDate: quota.resetDate || undefined,
+          trend: trend as any,
         };
       }
 
@@ -150,14 +156,14 @@ export class UsageService {
 
       // Generate timeline if requested
       const timeline = request.groupBy
-        ? this.generateTimeline(records, request.groupBy)
+        ? (this.generateTimeline(records, request.groupBy) as any)
         : undefined;
 
       return {
         summary,
         metrics,
         timeline,
-        details: request.includeDetails ? records : undefined,
+        details: request.includeDetails ? (records as any) : undefined,
       };
     } catch (error) {
       console.error('Error generating usage report:', error);
@@ -205,7 +211,10 @@ export class UsageService {
         },
       });
 
-      return quota;
+      return {
+        ...quota,
+        resetDate: quota.resetDate || undefined,
+      } as UsageQuota;
     } catch (error) {
       console.error('Error updating quota:', error);
       throw new Error('Failed to update usage quota');
@@ -239,7 +248,7 @@ export class UsageService {
         },
       });
 
-      return alerts;
+      return alerts as UsageAlert[];
     } catch (error) {
       console.error('Error getting user alerts:', error);
       throw new Error('Failed to get usage alerts');
@@ -455,8 +464,31 @@ export class UsageService {
       },
     });
 
-    // Send notification
-    await notificationService.notifyUsageAlert(alert);
+    // Send notification based on alert type
+    const percentage = Math.round((alert.currentUsage / alert.limitAmount) * 100);
+    const metricTypeReadable = metricType.toLowerCase().replace('_', ' ');
+
+    if (alertType === UsageAlertType.EXCEEDED || alertType === UsageAlertType.CRITICAL) {
+      await notificationService.createFromTemplate(
+        'USAGE_THRESHOLD_CRITICAL',
+        userId,
+        {
+          threshold: alertType === UsageAlertType.EXCEEDED ? '100' : '95',
+          percentage: percentage.toString(),
+          metricType: metricTypeReadable,
+        },
+      );
+    } else {
+      await notificationService.createFromTemplate(
+        'USAGE_THRESHOLD_WARNING',
+        userId,
+        {
+          threshold: alertType === UsageAlertType.APPROACHING ? '90' : quota.alertThreshold.toString(),
+          percentage: percentage.toString(),
+          metricType: metricTypeReadable,
+        },
+      );
+    }
   }
 
   private async calculateUsageTrend(subscriptionId: string, metricType: UsageMetricType) {

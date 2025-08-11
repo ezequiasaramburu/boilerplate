@@ -1,270 +1,339 @@
 import { prisma } from '@my/database';
-import type { EmailData, SubscriptionWithPlan } from '@my/types';
-import { createEmailClient } from '../utils/email/email.factory.js';
-import { renderEmailTemplate } from '../utils/email/templates.js';
+import type { 
+  Notification,
+  CreateNotificationInput,
+  UpdateNotificationInput,
+  BulkUpdateNotificationsInput,
+  NotificationListRequest,
+  PaginatedNotificationsResult,
+  NotificationStats,
+  NotificationType,
+  NotificationPriority,
+  NOTIFICATION_TEMPLATES,
+  NotificationTemplateKey,
+} from '@my/types';
 
-class NotificationService {
-  // Send email via selected provider
-  async sendEmail(emailData: EmailData): Promise<void> {
-    try {
-      const client = createEmailClient();
-      const { html, text } = await renderEmailTemplate(emailData.template, emailData.data);
-      await client.send({ to: emailData.to, subject: emailData.subject, html, text });
-    } catch (error) {
-      console.error('Failed to send email notification:', error);
-      // Don't throw - email failures shouldn't stop processing
-    }
-  }
-
-  // Subscription created notification
-  async notifySubscriptionCreated(subscription: SubscriptionWithPlan): Promise<void> {
-    const emailData: EmailData = {
-      to: subscription.user.email,
-      subject: `Welcome to ${subscription.plan.name}! 🎉`,
-      template: 'subscription-created',
-      data: {
-        userName: subscription.user.name || 'there',
-        planName: subscription.plan.name,
-        amount: this.formatAmount(subscription.amount, subscription.currency),
-        trialEnd: subscription.trialEnd,
-        nextBillingDate: subscription.currentPeriodEnd,
-        features: subscription.plan.features || [],
-      },
-    };
-
-    await this.sendEmail(emailData);
-  }
-
-  // Payment succeeded notification
-  async notifyPaymentSucceeded(
-    subscription: SubscriptionWithPlan,
-    invoiceAmount: number,
-  ): Promise<void> {
-    const emailData: EmailData = {
-      to: subscription.user.email,
-      subject: 'Payment Confirmed ✅',
-      template: 'payment-succeeded',
-      data: {
-        userName: subscription.user.name || 'there',
-        planName: subscription.plan.name,
-        amount: this.formatAmount(invoiceAmount, subscription.currency),
-        nextBillingDate: subscription.currentPeriodEnd,
-        invoiceUrl: '#', // TODO: Add invoice URL from Stripe
-      },
-    };
-
-    await this.sendEmail(emailData);
-  }
-
-  // Payment failed notification
-  async notifyPaymentFailed(
-    subscription: SubscriptionWithPlan,
-    invoiceAmount: number,
-  ): Promise<void> {
-    const emailData: EmailData = {
-      to: subscription.user.email,
-      subject: '⚠️ Payment Failed - Action Required',
-      template: 'payment-failed',
-      data: {
-        userName: subscription.user.name || 'there',
-        planName: subscription.plan.name,
-        amount: this.formatAmount(invoiceAmount, subscription.currency),
-        retryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
-        updatePaymentUrl: `${process.env.FRONTEND_URL}/billing/payment-method`,
-      },
-    };
-
-    await this.sendEmail(emailData);
-  }
-
-  // Subscription canceled notification
-  async notifySubscriptionCanceled(subscription: SubscriptionWithPlan): Promise<void> {
-    const emailData: EmailData = {
-      to: subscription.user.email,
-      subject: 'Subscription Canceled',
-      template: 'subscription-canceled',
-      data: {
-        userName: subscription.user.name || 'there',
-        planName: subscription.plan.name,
-        accessUntil: subscription.currentPeriodEnd,
-        reactivateUrl: `${process.env.FRONTEND_URL}/billing`,
-      },
-    };
-
-    await this.sendEmail(emailData);
-  }
-
-  // Subscription expiring soon notification
-  async notifySubscriptionExpiring(subscription: SubscriptionWithPlan): Promise<void> {
-    const millisecondsPerDay = 1000 * 60 * 60 * 24;
-    const daysLeft = Math.ceil(
-      (subscription.currentPeriodEnd.getTime() - Date.now()) / millisecondsPerDay,
-    );
-
-    const emailData: EmailData = {
-      to: subscription.user.email,
-      subject: `Subscription Expiring in ${daysLeft} Days`,
-      template: 'subscription-expiring',
-      data: {
-        userName: subscription.user.name || 'there',
-        planName: subscription.plan.name,
-        daysLeft,
-        expirationDate: subscription.currentPeriodEnd,
-        renewUrl: `${process.env.FRONTEND_URL}/billing`,
-      },
-    };
-
-    await this.sendEmail(emailData);
-  }
-
-  // Trial ending notification
-  async notifyTrialEnding(subscription: SubscriptionWithPlan): Promise<void> {
-    if (!subscription.trialEnd) return;
-
-    const millisecondsPerDay = 1000 * 60 * 60 * 24;
-    const daysLeft = Math.ceil(
-      (subscription.trialEnd.getTime() - Date.now()) / millisecondsPerDay,
-    );
-
-    const emailData: EmailData = {
-      to: subscription.user.email,
-      subject: `Trial Ending in ${daysLeft} Days`,
-      template: 'trial-ending',
-      data: {
-        userName: subscription.user.name || 'there',
-        planName: subscription.plan.name,
-        daysLeft,
-        trialEndDate: subscription.trialEnd,
-        upgradeUrl: `${process.env.FRONTEND_URL}/billing/upgrade`,
-      },
-    };
-
-    await this.sendEmail(emailData);
-  }
-
-  // Admin notifications for important events
-  async notifyAdmin(event: string, data: Record<string, any>): Promise<void> {
-    const adminEmail = process.env.ADMIN_EMAIL;
-    if (!adminEmail) return;
-
-    const emailData: EmailData = {
-      to: adminEmail,
-      subject: `[Admin Alert] ${event}`,
-      template: 'admin-notification',
-      data: {
-        event,
-        timestamp: new Date().toISOString(),
-        ...data,
-      },
-    };
-
-    await this.sendEmail(emailData);
-  }
-
-  // Webhook processing error notification
-  async notifyWebhookError(eventType: string, eventId: string, error: string): Promise<void> {
-    await this.notifyAdmin('Webhook Processing Error', {
-      eventType,
-      eventId,
-      error,
-      severity: 'high',
+export class NotificationService {
+  /**
+   * Create a new notification
+   */
+  async createNotification(data: CreateNotificationInput): Promise<Notification> {
+    return prisma.notification.create({
+      data,
     });
   }
 
-  // Format amount for display
-  private formatAmount(amount: number, currency: string): string {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency.toUpperCase(),
-    }).format(amount / 100);
+  /**
+   * Create notification from template
+   */
+  async createFromTemplate(
+    templateKey: NotificationTemplateKey,
+    userId: string,
+    variables: Record<string, string> = {},
+    overrides: Partial<CreateNotificationInput> = {}
+  ): Promise<Notification> {
+    const template = NOTIFICATION_TEMPLATES[templateKey];
+    
+    // Replace template variables
+    const title = this.replaceTemplateVariables(template.titleTemplate, variables);
+    const message = this.replaceTemplateVariables(template.messageTemplate, variables);
+    
+    const notificationData: CreateNotificationInput = {
+      userId,
+      type: template.type,
+      title,
+      message,
+      priority: template.priority,
+      category: template.category,
+      actionUrl: template.actionUrl,
+      ...overrides, // Allow overriding any field
+    };
+
+    return this.createNotification(notificationData);
   }
 
-  // Slack/Discord webhook notification (for team alerts)
-  async sendSlackNotification(message: string, channel: string = 'general'): Promise<void> {
-    try {
-      const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
-      if (!slackWebhookUrl) return;
+  /**
+   * Get notifications for a user with pagination and filters
+   */
+  async getUserNotifications(
+    userId: string,
+    filters: NotificationListRequest
+  ): Promise<PaginatedNotificationsResult> {
+    const {
+      page,
+      limit,
+      read,
+      type,
+      priority,
+      category,
+    } = filters;
 
-      const payload = {
-        channel: `#${channel}`,
-        text: message,
-        username: 'SaaS Bot',
-        icon_emoji: ':moneybag:',
-      };
+    const skip = (page - 1) * limit;
 
-      // TODO: Replace with actual HTTP request
-      console.log('💬 Slack notification:', payload);
+    // Build where clause
+    const where: any = {
+      userId,
+      // Filter out expired notifications
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: new Date() } },
+      ],
+    };
 
-      // In production:
-      // await fetch(slackWebhookUrl, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(payload),
-      // })
-    } catch (error) {
-      console.error('Failed to send Slack notification:', error);
+    if (read !== undefined) {
+      where.read = read;
     }
-  }
 
-  // Revenue milestone notifications
-  async notifyRevenueMilestone(monthlyRevenue: number, milestone: number): Promise<void> {
-    await this.notifyAdmin('Revenue Milestone Reached! 🎉', {
-      monthlyRevenue: this.formatAmount(monthlyRevenue, 'usd'),
-      milestone: this.formatAmount(milestone, 'usd'),
-    });
+    if (type) {
+      where.type = type;
+    }
 
-    await this.sendSlackNotification(
-      `🎉 Revenue milestone reached! Monthly revenue: ${this.formatAmount(monthlyRevenue, 'usd')}`,
-      'revenue',
-    );
-  }
+    if (priority) {
+      where.priority = priority;
+    }
 
-  // Usage alert notifications
-  async notifyUsageAlert(alert: any): Promise<void> {
-    const percentage = ((alert.currentUsage / alert.limitAmount) * 100).toFixed(1);
-    const alertEmoji = this.getAlertEmoji(alert.alertType);
+    if (category) {
+      where.category = category;
+    }
 
-    const emailData = {
-      to: alert.user.email,
-      subject: `${alertEmoji} Usage Alert: ${alert.metricType} at ${percentage}%`,
-      template: 'usage-alert',
-      data: {
-        userName: alert.user.name || 'there',
-        alertType: alert.alertType,
-        metricType: alert.metricType,
-        currentUsage: alert.currentUsage,
-        limitAmount: alert.limitAmount,
-        percentage,
-        planName: alert.subscription.plan.name,
-        dashboardUrl: `${process.env.FRONTEND_URL}/dashboard/usage`,
+    // Execute queries in parallel
+    const [notifications, total, stats] = await Promise.all([
+      prisma.notification.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [
+          { priority: 'desc' }, // High priority first
+          { createdAt: 'desc' }, // Then newest first
+        ],
+      }),
+      prisma.notification.count({ where }),
+      this.getNotificationStats(userId),
+    ]);
+
+    return {
+      items: notifications,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
       },
+      stats,
+    };
+  }
+
+  /**
+   * Get notification statistics for a user
+   */
+  async getNotificationStats(userId: string): Promise<NotificationStats> {
+    const where = {
+      userId,
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: new Date() } },
+      ],
     };
 
-    await this.sendEmail(emailData);
+    const [total, unread, byType, byPriority] = await Promise.all([
+      prisma.notification.count({ where }),
+      prisma.notification.count({ where: { ...where, read: false } }),
+      prisma.notification.groupBy({
+        by: ['type'],
+        where,
+        _count: { _all: true },
+      }),
+      prisma.notification.groupBy({
+        by: ['priority'],
+        where,
+        _count: { _all: true },
+      }),
+    ]);
 
-    // Send Slack notification for critical alerts
-    if (alert.alertType === 'CRITICAL' || alert.alertType === 'EXCEEDED') {
-      await this.sendSlackNotification(
-        `${alertEmoji} Usage Alert: ${alert.user.email} - ${alert.metricType} at ${percentage}% (${alert.currentUsage}/${alert.limitAmount})`,
-        'usage-alerts',
-      );
-    }
+    // Convert arrays to record objects
+    const typeStats = Object.values(NotificationType).reduce((acc, type) => {
+      acc[type] = byType.find(item => item.type === type)?._count._all || 0;
+      return acc;
+    }, {} as Record<NotificationType, number>);
 
-    // Update alert as notification sent
-    await prisma.usageAlert.update({
-      where: { id: alert.id },
-      data: { notificationSent: true, emailSent: true },
+    const priorityStats = Object.values(NotificationPriority).reduce((acc, priority) => {
+      acc[priority] = byPriority.find(item => item.priority === priority)?._count._all || 0;
+      return acc;
+    }, {} as Record<NotificationPriority, number>);
+
+    return {
+      total,
+      unread,
+      byType: typeStats,
+      byPriority: priorityStats,
+    };
+  }
+
+  /**
+   * Get a single notification by ID (must belong to user)
+   */
+  async getNotificationById(id: string, userId: string): Promise<Notification | null> {
+    return prisma.notification.findFirst({
+      where: {
+        id,
+        userId,
+      },
     });
   }
 
-  private getAlertEmoji(alertType: string): string {
-    const emojiMap: Record<string, string> = {
-      WARNING: '⚠️',
-      APPROACHING: '📈',
-      CRITICAL: '🚨',
-      EXCEEDED: '🛑',
+  /**
+   * Mark notification as read
+   */
+  async markAsRead(id: string, userId: string): Promise<Notification> {
+    return prisma.notification.update({
+      where: { id },
+      data: {
+        read: true,
+        readAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Mark notification as unread
+   */
+  async markAsUnread(id: string, userId: string): Promise<Notification> {
+    return prisma.notification.update({
+      where: { id },
+      data: {
+        read: false,
+        readAt: null,
+      },
+    });
+  }
+
+  /**
+   * Bulk update notifications (mark multiple as read/unread)
+   */
+  async bulkUpdateNotifications(
+    data: BulkUpdateNotificationsInput,
+    userId: string
+  ): Promise<{ count: number }> {
+    const updateData: any = {
+      read: data.read,
     };
-    return emojiMap[alertType] || '📊';
+
+    if (data.read) {
+      updateData.readAt = new Date();
+    } else {
+      updateData.readAt = null;
+    }
+
+    const result = await prisma.notification.updateMany({
+      where: {
+        id: { in: data.notificationIds },
+        userId, // Ensure user can only update their own notifications
+      },
+      data: updateData,
+    });
+
+    return { count: result.count };
+  }
+
+  /**
+   * Mark all notifications as read for a user
+   */
+  async markAllAsRead(userId: string): Promise<{ count: number }> {
+    const result = await prisma.notification.updateMany({
+      where: {
+        userId,
+        read: false,
+      },
+      data: {
+        read: true,
+        readAt: new Date(),
+      },
+    });
+
+    return { count: result.count };
+  }
+
+  /**
+   * Delete a notification
+   */
+  async deleteNotification(id: string, userId: string): Promise<void> {
+    await prisma.notification.deleteMany({
+      where: {
+        id,
+        userId, // Ensure user can only delete their own notifications
+      },
+    });
+  }
+
+  /**
+   * Delete multiple notifications
+   */
+  async bulkDeleteNotifications(
+    notificationIds: string[],
+    userId: string
+  ): Promise<{ count: number }> {
+    const result = await prisma.notification.deleteMany({
+      where: {
+        id: { in: notificationIds },
+        userId,
+      },
+    });
+
+    return { count: result.count };
+  }
+
+  /**
+   * Clean up expired notifications (for scheduled jobs)
+   */
+  async cleanupExpiredNotifications(): Promise<{ count: number }> {
+    const result = await prisma.notification.deleteMany({
+      where: {
+        expiresAt: {
+          lt: new Date(),
+        },
+      },
+    });
+
+    return { count: result.count };
+  }
+
+  /**
+   * Get recent notifications for a user (for real-time updates)
+   */
+  async getRecentNotifications(
+    userId: string,
+    limit: number = 5,
+    since?: Date
+  ): Promise<Notification[]> {
+    const where: any = {
+      userId,
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: new Date() } },
+      ],
+    };
+
+    if (since) {
+      where.createdAt = { gt: since };
+    }
+
+    return prisma.notification.findMany({
+      where,
+      take: limit,
+      orderBy: [
+        { priority: 'desc' },
+        { createdAt: 'desc' },
+      ],
+    });
+  }
+
+  /**
+   * Replace template variables in strings
+   */
+  private replaceTemplateVariables(template: string, variables: Record<string, string>): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+      return variables[key] || match;
+    });
   }
 }
 

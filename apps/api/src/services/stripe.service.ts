@@ -74,6 +74,14 @@ class StripeService {
       // Get or create Stripe customer
       const customer = await this.getOrCreateCustomer(userId);
 
+      // Validate requested plan/price against database
+      const plan = await prisma.subscriptionPlan.findUnique({
+        where: { stripePriceId: request.priceId },
+      });
+      if (!plan || !plan.active) {
+        throw new Error('Invalid or inactive plan');
+      }
+
       // Default URLs
       const successUrl = request.successUrl || `${process.env.FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = request.cancelUrl || `${process.env.FRONTEND_URL}/billing/cancel`;
@@ -83,7 +91,7 @@ class StripeService {
         payment_method_types: ['card'],
         line_items: [
           {
-            price: request.priceId,
+            price: plan.stripePriceId,
             quantity: 1,
           },
         ],
@@ -94,14 +102,16 @@ class StripeService {
         billing_address_collection: 'required',
         metadata: {
           userId,
+          planId: plan.id,
           ...request.metadata,
         },
       };
 
       // Add trial if specified
-      if (request.trialDays && request.trialDays > 0) {
+      const trialDays = plan.trialDays ?? request.trialDays;
+      if (trialDays && trialDays > 0) {
         sessionParams.subscription_data = {
-          trial_period_days: request.trialDays,
+          trial_period_days: trialDays,
         };
       }
 
@@ -353,6 +363,8 @@ class StripeService {
         ...plan,
         features: plan.features ? (plan.features as string[]) : [],
         formattedAmount: this.formatAmount(plan.amount, plan.currency),
+        isPopular: plan.popular,
+        intervalLabel: plan.interval === 'YEAR' ? 'year' : 'month',
       }));
     } catch (error) {
       console.error('Error getting subscription plans:', error);

@@ -216,6 +216,20 @@ export type CreateCheckoutSessionResponse = {
   url: string;
 };
 
+// Public plan shape for pricing UI/API
+export interface PublicPlan {
+  id: string;
+  name: string;
+  description?: string;
+  amount: number;
+  currency: string;
+  interval: BillingInterval;
+  intervalCount: number;
+  features: string[];
+  stripePriceId: string;
+  popular: boolean;
+}
+
 export type CreatePortalSessionRequest = {
   returnUrl?: string;
 };

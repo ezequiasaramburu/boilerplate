@@ -21,9 +21,12 @@ import {
 } from './middleware/index.js';
 import { authenticateToken } from './middleware/auth.middleware.js';
 import passport from './config/passport.config.js';
+import { analyticsRouter } from './routes/analytics.js';
 import { authRouter } from './routes/auth.js';
 import { billingRouter } from './routes/billing.js';
+import { publicBillingRouter } from './routes/billing-public.js';
 import { invoiceRoutes, publicInvoiceRoutes } from './routes/invoices.js';
+import { notificationRouter } from './routes/notifications.js';
 import { socialAuthRouter } from './routes/social-auth.js';
 import { usageRouter } from './routes/usage.js';
 import { usersRouter } from './routes/users.js';
@@ -87,11 +90,14 @@ app.get(`${API_VERSION}/csrf-token`, csrfTokenEndpoint);
 
 // Apply specific rate limits and CSRF protection to different route groups
 app.use(`${API_VERSION}/auth`, authRateLimit, jwtCSRFProtection, authRouter);
+app.use(`${API_VERSION}/public/billing`, publicBillingRouter);
 app.use(`${API_VERSION}/auth/oauth`, oauthRateLimit, socialAuthRouter); // OAuth skips CSRF
 app.use(`${API_VERSION}/users`, authenticateToken, usersRouter);
 app.use(`${API_VERSION}/billing`, authenticateToken, billingRouter);
 app.use(`${API_VERSION}/usage`, authenticateToken, usageRouter);
+app.use(`${API_VERSION}/analytics`, authenticateToken, analyticsRouter);
 app.use(`${API_VERSION}/invoices`, invoiceRoutes);
+app.use(`${API_VERSION}/notifications`, notificationRouter);
 app.use(`${API_VERSION}/admin/webhooks`, webhookAdminRouter);
 
 // Public invoice routes (no auth required)

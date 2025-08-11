@@ -2,14 +2,17 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { prisma } from '@my/database';
-import type {
-  AuthResponse,
-  AuthTokens,
-  AuthUser,
-  ChangePasswordInput,
-  JWTPayload,
-  LoginInput,
-  RegisterInput,
+import { notificationService } from './notification.service.js';
+import {
+  type AuthResponse,
+  type AuthTokens,
+  type AuthUser,
+  type ChangePasswordInput,
+  type JWTPayload,
+  type LoginInput,
+  NotificationPriority,
+  NotificationType,
+  type RegisterInput,
 } from '@my/types';
 
 export class AuthService {
@@ -51,6 +54,20 @@ export class AuthService {
 
     // Generate tokens
     const tokens = await this.generateTokens(user);
+
+    // Send welcome notification
+    try {
+      await notificationService.createFromTemplate(
+        'WELCOME',
+        user.id,
+        {
+          appName: process.env.APP_NAME || 'SaaS App',
+        },
+      );
+    } catch (error) {
+      console.error('Failed to send welcome notification:', error);
+      // Don't fail registration if notification fails
+    }
 
     return {
       user: this.formatUserResponse(user),
@@ -177,13 +194,15 @@ export class AuthService {
       },
     });
 
-    // Send email
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-    await (await import('./notification.service.js')).notificationService.sendEmail({
-      to: user.email,
-      subject: 'Reset your password',
-      template: 'password-reset',
-      data: { name: user.name || 'there', resetUrl, expires },
+    // Send password reset notification
+    await notificationService.createNotification({
+      userId: user.id,
+      type: NotificationType.SECURITY,
+      priority: NotificationPriority.HIGH,
+      category: 'security',
+      title: 'Password Reset Requested',
+      message: 'A password reset was requested for your account. Check your email for the reset link.',
+      expiresAt: expires,
     });
   }
 
@@ -217,12 +236,14 @@ export class AuthService {
       data: { emailVerificationToken: token },
     });
 
-    const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
-    await (await import('./notification.service.js')).notificationService.sendEmail({
-      to: user.email,
-      subject: 'Verify your email',
-      template: 'verify-email',
-      data: { name: user.name || 'there', verifyUrl },
+    // Send email verification notification
+    await notificationService.createNotification({
+      userId: user.id,
+      type: NotificationType.INFO,
+      priority: NotificationPriority.NORMAL,
+      category: 'security',
+      title: 'Email Verification Required',
+      message: 'Please check your email and click the verification link to verify your account.',
     });
   }
 
